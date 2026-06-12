@@ -8,20 +8,23 @@
 </head>
 <body class="bg-slate-100 p-4">
     <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+        
         <div class="md:col-span-2 space-y-6">
             <div class="bg-white p-6 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
+                <label class="block text-sm font-bold mb-1">Ver pronósticos de:</label>
                 <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
-                    <option value="">Cargando usuarios...</option>
+                    <option value="">Cargando participantes...</option>
                 </select>
                 <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
                 <div id="status" class="mt-4 text-sm"></div>
             </div>
         </div>
+
         <div class="md:col-span-1">
             <div class="bg-white p-6 rounded-xl shadow sticky top-6">
                 <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
-                <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Esperando datos...</div>
+                <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos"</div>
             </div>
         </div>
     </div>
@@ -30,18 +33,20 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            const userParam = new URLSearchParams(window.location.search).get('usuario');
+            const urlParams = new URLSearchParams(window.location.search);
+            const userParam = urlParams.get('usuario');
             const sel = document.getElementById('userSelector');
-            const { data } = await cliente.from('usuarios').select('nombre');
             
-            sel.innerHTML = '<option value="">Selecciona participante</option>';
+            const { data } = await cliente.from('usuarios').select('nombre');
+            sel.innerHTML = '<option value="">Selecciona un participante...</option>';
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
             if (userParam) {
                 sel.value = userParam;
-                sel.disabled = true;
                 document.getElementById('btnLoad').click();
             }
+            
+            sel.onchange = cargarTodo;
         }
 
         async function guardarPronostico(pId, iL, iV) {
@@ -58,10 +63,16 @@
 
         async function cargarTodo() {
             const nombre = document.getElementById('userSelector').value;
+            if (!nombre) return;
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const usuarioLogueado = urlParams.get('usuario');
+            const esSoloLectura = (usuarioLogueado && nombre !== usuarioLogueado);
+            
             const status = document.getElementById('status');
             const lb = document.getElementById('leaderboard');
+            status.innerHTML = "Cargando...";
             
-            // 1. Obtener partidos y pronósticos en paralelo
             const [resPartidos, {data: pronosticos}] = await Promise.all([
                 fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                 cliente.from('pronosticos').select('*')
@@ -69,28 +80,42 @@
             
             const dataPartidos = await resPartidos.json();
             
-            // 2. Dibujar partidos
             status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
-                const color = m.status === 'FINISHED' ? (p?.pronostico_local == m.score.fullTime.home && p?.pronostico_visitante == m.score.fullTime.away ? 'bg-green-300' : 'bg-red-300') : '';
+                const disabled = esSoloLectura ? 'disabled' : '';
+                const displayBtn = esSoloLectura ? 'hidden' : '';
+                
+                let colorClass = '';
+                if (m.status === 'FINISHED') {
+                    const rL = m.score.fullTime.home;
+                    const rV = m.score.fullTime.away;
+                    if (p?.pronostico_local == rL && p?.pronostico_visitante == rV) colorClass = 'bg-green-300';
+                    else if ((p?.pronostico_local > p?.pronostico_visitante && rL > rV) || 
+                             (p?.pronostico_local < p?.pronostico_visitante && rL < rV) ||
+                             (p?.pronostico_local === p?.pronostico_visitante && rL === rV)) colorClass = 'bg-yellow-300';
+                    else colorClass = 'bg-red-300';
+                }
+
                 return `
                 <div class="flex items-center justify-between p-2 border-b text-xs">
                     <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
                     <div class="flex gap-1">
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local || ''}" class="w-8 border text-center rounded ${color}">
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante || ''}" class="w-8 border text-center rounded ${color}">
-                        <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" class="bg-green-600 text-white px-2 rounded">OK</button>
+                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-8 border text-center rounded ${colorClass}" ${disabled}>
+                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-8 border text-center rounded ${colorClass}" ${disabled}>
+                        <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" class="bg-green-600 text-white px-2 rounded ${displayBtn}">OK</button>
                     </div>
                 </div>`;
             }).join('');
 
-            // 3. Calcular tabla
             let scores = {};
             pronosticos?.forEach(p => {
                 const m = dataPartidos.matches.find(x => x.id == p.partido_id);
                 if (m?.status === 'FINISHED') {
                     if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                    if (p.pronostico_local == m.score.fullTime.home && p.pronostico_visitante == m.score.fullTime.away) scores[p.nombre_usuario] += 3;
+                    const rL = m.score.fullTime.home;
+                    const rV = m.score.fullTime.away;
+                    if (p.pronostico_local === rL && p.pronostico_visitante === rV) scores[p.nombre_usuario] += 3;
+                    else if ((p.pronostico_local > p.pronostico_visitante && rL > rV) || (p.pronostico_local < p.pronostico_visitante && rL < rV) || (p.pronostico_local === p.pronostico_visitante && rL === rV)) scores[p.nombre_usuario] += 1;
                 }
             });
             lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
