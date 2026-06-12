@@ -6,19 +6,20 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 p-8">
+<body class="bg-slate-100 p-4 md:p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4 text-slate-800">Quiniela Mundial 2026</h1>
+        <h1 class="text-2xl font-bold mb-6 text-slate-800 text-center">🏆 Quiniela Mundial 2026</h1>
         
-        <button id="btnSync" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold transition">
-            🚀 Cargar Partidos
+        <button id="btnSync" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold transition shadow-md">
+            🚀 Sincronizar Datos
         </button>
         
-        <div id="status" class="mt-6">
+        <div id="status" class="mt-8">
             </div>
     </div>
 
     <script>
+        // Inicialización de Supabase
         const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -26,54 +27,57 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerHTML = '<p class="text-blue-600 font-mono italic text-center">⏳ Obteniendo datos del Mundial...</p>';
+            status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Obteniendo información...</p>';
 
             try {
-                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-                
-                if (!res.ok) throw new Error("Error en servidor: " + res.status);
-                
-                const data = await res.json();
-                
-                let html = '<div class="space-y-3">';
-                html += '<h2 class="font-bold text-lg text-green-600 mb-4">✅ Partidos:</h2>';
-                
-                if (data.matches && data.matches.length > 0) {
-                    data.matches.slice(0, 10).forEach(m => {
-                        // Seguridad para manejar marcadores nulos
-                        const homeScore = (m.score && m.score.fullTime && m.score.fullTime.home !== null) ? m.score.fullTime.home : "-";
-                        const awayScore = (m.score && m.score.fullTime && m.score.fullTime.away !== null) ? m.score.fullTime.away : "-";
-                        
-                        // Traducción de estados
-                        const estados = {
-                            'FINISHED': { text: 'Finalizado', color: 'bg-slate-200 text-slate-600' },
-                            'IN_PLAY': { text: 'En Juego', color: 'bg-red-500 text-white animate-pulse' },
-                            'TIMED': { text: 'Programado', color: 'bg-blue-100 text-blue-600' },
-                            'POSTPONED': { text: 'Aplazado', color: 'bg-yellow-100 text-yellow-600' }
-                        };
-                        const estado = estados[m.status] || { text: m.status, color: 'bg-gray-100' };
+                // 1. Obtener Partidos y Participantes en paralelo
+                const [resApi, resDb] = await Promise.all([
+                    fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
+                    cliente.from('participantes').select('nombre') // Cambia 'participantes' si tu tabla se llama distinto
+                ]);
 
-                        html += `
-                            <div class="p-4 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center mb-2">
-                                <div class="w-2/3">
-                                    <p class="font-bold text-slate-800">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
-                                    <p class="text-xs text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="font-black text-lg text-blue-700">${homeScore} - ${awayScore}</p>
-                                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${estado.color}">${estado.text}</span>
-                                </div>
-                            </div>`;
-                    });
-                } else {
-                    html += '<p class="text-center">No se encontraron partidos disponibles.</p>';
-                }
-                html += '</div>';
+                const dataPartidos = await resApi.json();
+                const { data: listaParticipantes, error } = resDb;
+
+                if (error) throw new Error("Error cargando participantes: " + error.message);
+
+                // 2. Construcción del HTML
+                let html = '<div class="space-y-8">';
+                
+                // Sección Participantes
+                html += `<div>
+                    <h2 class="font-bold text-lg text-slate-800 border-b pb-2">👥 Participantes (${listaParticipantes?.length || 0})</h2>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        ${listaParticipantes?.map(p => `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${p.nombre}</span>`).join('')}
+                    </div>
+                </div>`;
+
+                // Sección Partidos
+                html += '<div><h2 class="font-bold text-lg text-green-600 border-b pb-2 mb-4">⚽ Partidos Recientes</h2>';
+                dataPartidos.matches?.slice(0, 8).forEach(m => {
+                    const homeScore = m.score?.fullTime?.home ?? "-";
+                    const awayScore = m.score?.fullTime?.away ?? "-";
+                    const isFinished = m.status === 'FINISHED';
+                    
+                    html += `
+                        <div class="p-3 bg-slate-50 border border-slate-100 rounded-lg flex justify-between items-center mb-2">
+                            <div class="w-2/3">
+                                <p class="font-bold text-sm text-slate-700">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
+                                <p class="text-[10px] text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-black text-blue-600">${homeScore} - ${awayScore}</p>
+                                <span class="text-[9px] uppercase ${isFinished ? 'text-slate-400' : 'text-green-600 font-bold'}">${m.status}</span>
+                            </div>
+                        </div>`;
+                });
+                html += '</div></div>';
                 
                 status.innerHTML = html;
                 
             } catch (e) {
-                status.innerHTML = '<p class="text-red-600 font-bold text-center">❌ Error: ' + e.message + '</p>';
+                status.innerHTML = `<p class="text-red-600 font-bold text-center">❌ ${e.message}</p>`;
+                console.error(e);
             }
         }
 
