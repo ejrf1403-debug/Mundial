@@ -2,12 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Quiniela 2026 - Debug</title>
+    <title>Quiniela 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 p-4">
-    <div id="debug" class="text-red-600 font-bold mb-4"></div>
     <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="md:col-span-2 space-y-6">
             <div class="bg-white p-6 rounded-xl shadow">
@@ -19,28 +18,24 @@
                 <div id="status" class="mt-4 space-y-1"></div>
             </div>
         </div>
+        
         <div class="md:col-span-1">
             <div class="bg-white p-6 rounded-xl shadow sticky top-6 max-h-[80vh] flex flex-col">
-                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla</h2>
-                <div id="leaderboard" class="space-y-2 text-sm overflow-y-auto pr-2"></div>
+                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
+                <div id="leaderboard" class="space-y-2 text-sm overflow-y-auto pr-2">Selecciona un usuario...</div>
             </div>
         </div>
     </div>
 
     <script>
-        const debug = document.getElementById('debug');
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            try {
-                const { data, error } = await cliente.from('usuarios').select('nombre');
-                if (error) throw error;
-                const sel = document.getElementById('userSelector');
-                data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-                
-                const userParam = new URLSearchParams(window.location.search).get('usuario');
-                if (userParam) { sel.value = userParam; cargarTodo(); }
-            } catch (e) { debug.innerHTML = "Error cargando usuarios: " + e.message; }
+            const { data } = await cliente.from('usuarios').select('nombre');
+            const sel = document.getElementById('userSelector');
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            const userParam = new URLSearchParams(window.location.search).get('usuario');
+            if (userParam) { sel.value = userParam; cargarTodo(); }
         }
 
         async function cargarTodo() {
@@ -49,22 +44,77 @@
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
             
-            status.innerHTML = "Obteniendo datos...";
-            try {
-                const response = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-                if (!response.ok) throw new Error("Error en API de partidos");
-                const dataPartidos = await response.json();
-                
-                const { data: pronosticos, error } = await cliente.from('pronosticos').select('*');
-                if (error) throw error;
+            status.innerHTML = "Cargando datos...";
+            const [resPartidos, {data: pronosticos}] = await Promise.all([
+                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
+                cliente.from('pronosticos').select('*')
+            ]);
+            
+            const dataPartidos = await resPartidos.json();
+            const ahora = new Date().getTime();
+            const urlParams = new URLSearchParams(window.location.search);
+            const userLogueado = urlParams.get('usuario');
+            
+            const esEmmanuel = (userLogueado === 'Emmanuel');
+            const esDueno = (userLogueado === nombre);
 
-                status.innerHTML = "Procesando...";
-                // ... (aquí iría tu lógica de renderizado) ...
-                status.innerHTML = "¡Carga completa! (Revisa tu consola si no ves nada)";
-                console.log("Datos recibidos:", dataPartidos, pronosticos);
-            } catch (e) {
-                status.innerHTML = "❌ Error: " + e.message;
-            }
+            // RENDERIZADO DE PARTIDOS
+            status.innerHTML = dataPartidos.matches.map(m => {
+                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
+                const fecha = new Date(m.utcDate).getTime();
+                
+                const estaBloqueado = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'disabled' : '');
+                const estaOculto = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'hidden' : '');
+
+                let color = '';
+                if (m.status === 'FINISHED') {
+                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                    const pL = parseInt(p?.pronostico_local), pV = parseInt(p?.pronostico_visitante);
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
+                }
+
+                return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
+                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${estaOculto}">OK</button>
+                </div>`;
+            }).join('');
+
+            // RENDERIZADO DE TABLA
+            let scores = {};
+            pronosticos?.forEach(p => {
+                const m = dataPartidos.matches.find(x => x.id == p.partido_id);
+                if (m?.status === 'FINISHED') {
+                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                    }
+                }
+            });
+            lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => {
+                const podium = i === 0 ? 'bg-yellow-400 font-bold' : i === 1 ? 'bg-gray-300' : i === 2 ? 'bg-amber-600 text-white' : '';
+                const emoji = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+                return `<div class="flex justify-between items-center p-2 ${podium} border rounded"><span>${i+1}. ${emoji} ${n}</span><b>${s} pts</b></div>`;
+            }).join('');
+        }
+
+        async function guardar(id) {
+            const nombre = document.getElementById('userSelector').value;
+            await cliente.from('pronosticos').upsert({
+                nombre_usuario: nombre, partido_id: String(id),
+                pronostico_local: parseInt(document.getElementById('l-'+id).value),
+                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
+            }, { onConflict: 'nombre_usuario, partido_id' });
+            alert("Guardado");
+            cargarTodo();
         }
 
         document.getElementById('btnLoad').onclick = cargarTodo;
