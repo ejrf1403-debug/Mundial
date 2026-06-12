@@ -8,8 +8,7 @@
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
-        
+        <h1 class="text-xl font-bold mb-4">Sincronización Mundial 2026</h1>
         <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
             🔄 Sincronizar desde Servidor
         </button>
@@ -17,7 +16,7 @@
     </div>
 
     <script>
-        // Inicialización cliente Supabase
+        // DECLARACIÓN ÚNICA: Solo existe esta línea en todo el archivo
         const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -25,19 +24,17 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Conectando con servidor...";
+            status.innerText = "⏳ Solicitando datos...";
 
             try {
-                // Llamada a la Edge Function
                 const url = 'https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches';
-                
                 const res = await fetch(url);
+                
                 if (!res.ok) throw new Error("Error en servidor: " + res.status);
                 
                 const data = await res.json();
-                status.innerText = "✅ Datos recibidos. Guardando en Supabase...";
+                status.innerText = "✅ Datos recibidos. Guardando...";
 
-                // Insertar cada partido
                 for (const m of data.matches.slice(0, 5)) {
                     const { error } = await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
@@ -46,15 +43,11 @@
                         goles_visitante: m.score.fullTime.away ?? 0
                     }]);
 
-                    if (error) {
-                        console.error("Error al insertar:", error);
-                        throw new Error(error.message);
-                    }
+                    if (error) throw new Error(error.message);
                 }
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
-                console.error("Detalle técnico:", e);
             }
         }
 
