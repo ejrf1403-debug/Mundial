@@ -10,34 +10,36 @@
     <div class="max-w-2xl mx-auto space-y-6">
         <div class="bg-white p-6 rounded-xl shadow">
             <h1 class="text-xl font-bold mb-4 text-center">🛠 Panel de Administración</h1>
+            
+            <label class="block text-sm font-bold mb-1">Editar pronósticos de:</label>
             <select id="userSelector" onchange="cargarPronosticos()" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
                 <option value="">Cargando participantes...</option>
             </select>
+            
             <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos y Tabla</button>
             <div id="status" class="mt-4 text-sm"></div>
         </div>
 
         <div class="bg-white p-6 rounded-xl shadow">
             <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
-            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para ver la tabla.</div>
+            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para calcular puntos.</div>
         </div>
     </div>
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
+        // 1. Cargar Usuarios
         async function cargarUsuarios() {
             try {
-                const { data, error } = await cliente.from('usuarios').select('nombre');
-                if (error) throw error;
+                const { data } = await cliente.from('usuarios').select('nombre');
                 const sel = document.getElementById('userSelector');
                 sel.innerHTML = '<option value="">Selecciona un participante...</option>';
                 data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-            } catch (e) {
-                document.getElementById('userSelector').innerHTML = '<option>Error al cargar usuarios</option>';
-            }
+            } catch (e) { console.error("Error usuarios:", e); }
         }
 
+        // 2. Cargar Pronósticos de alguien
         async function cargarPronosticos() {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
@@ -51,6 +53,7 @@
             });
         }
 
+        // 3. Guardar
         async function guardarPronostico(partidoId, inputL, inputV) {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) { alert("¡Selecciona participante!"); return; }
@@ -64,6 +67,7 @@
             calcularPosiciones();
         }
 
+        // 4. Calcular Tabla
         async function calcularPosiciones() {
             const lb = document.getElementById('leaderboard');
             try {
@@ -77,7 +81,6 @@
                     if (!partidoReal) return;
                     if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                     
-                    // Si el partido terminó, sumamos puntos
                     if (partidoReal.status === 'FINISHED') {
                         const realL = partidoReal.score.fullTime.home;
                         const realV = partidoReal.score.fullTime.away;
@@ -88,14 +91,16 @@
                     }
                 });
 
-                lb.innerHTML = Object.entries(scores).length === 0 ? "Sin datos de partidos finalizados." :
-                    Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
-            } catch (e) { lb.innerHTML = "Error al calcular tabla."; }
+                lb.innerHTML = Object.entries(scores).length === 0 ? "Sin datos finalizados." :
+                    Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([n, p]) => 
+                    `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
+            } catch (e) { lb.innerHTML = "Error calculando puntos."; }
         }
 
+        // 5. Cargar Partidos
         document.getElementById('btnLoad').addEventListener('click', async () => {
             const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = "Cargando partidos...";
+            statusDiv.innerHTML = "Cargando...";
             try {
                 const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
                 const data = await res.json();
@@ -112,7 +117,7 @@
                 });
                 statusDiv.innerHTML = html + '</div>';
                 calcularPosiciones();
-            } catch (e) { statusDiv.innerHTML = "Error al cargar partidos."; }
+            } catch (e) { statusDiv.innerHTML = "Error cargando partidos: " + e.message; }
         });
 
         cargarUsuarios();
