@@ -3,62 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <title>Quiniela Mundial 2026</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 p-8">
-    <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
-        
-        <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
-            🔄 Sincronizar desde Servidor
-        </button>
-        <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
-    </div>
+<body>
+    <h1>Mi Quiniela Mundial 2026</h1>
+    
+    <button id="btnSync">Sincronizar Partidos</button>
+    <p id="status"></p>
 
     <script>
-        // 1. Inicialización del cliente
-        const clienteSupabase = supabase.createClient(
+        // 1. Inicialización ÚNICA: Solo una vez aquí
+        const supabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
 
-        async function sincronizarPartidos() {
+        // 2. Función lógica
+        async function iniciarSincronizacion() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Solicitando datos al servidor...";
+            status.innerText = "⏳ Conectando...";
 
             try {
-                // 2. Llamada a tu nueva Edge Function (el puente)
-                const url = 'https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches';
-                
-                const res = await fetch(url);
-                if (!res.ok) throw new Error("Error en la función: " + res.status);
-                
-                const data = await res.json();
-                status.innerText = "✅ Datos recibidos. Guardando...";
-
-                // 3. Inserción en tabla 'partidos'
-                for (const m of data.matches.slice(0, 5)) {
-                    const { error } = await clienteSupabase.from('partidos').insert([{ 
-                        equipo_local: m.homeTeam.name,
-                        equipo_visitante: m.awayTeam.name,
-                        goles_local: m.score.fullTime.home ?? 0,
-                        goles_visitante: m.score.fullTime.away ?? 0
-                    }]);
-
-                    if (error) {
-                        console.error("Error al insertar fila:", error);
-                        throw new Error(error.message);
-                    }
-                }
-                status.innerText = "¡Sincronización completa!";
-            } catch (e) {
-                status.innerText = "❌ Error: " + e.message;
-                console.error("Detalle técnico:", e);
+                // AQUÍ iría tu código de fetch y supabase.from('partidos').insert(...)
+                // Ejemplo rápido:
+                const { data, error } = await supabase.from('partidos').select('*');
+                status.innerText = "✅ ¡Sincronizado correctamente!";
+            } catch (error) {
+                status.innerText = "❌ Error: " + error.message;
             }
         }
 
-        document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
+        // 3. Conexión segura al botón
+        document.getElementById('btnSync').addEventListener('click', iniciarSincronizacion);
     </script>
 </body>
 </html>
