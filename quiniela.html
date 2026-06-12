@@ -10,35 +10,18 @@
 <body class="bg-slate-100 font-sans p-4 md:p-8 space-y-8">
 
     <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">🏆 Mi Quiniela Mundial 2026 ⚽</h1>
-        </div>
-
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6">
-            <h2 class="text-lg font-bold text-slate-700 mb-2">Paso 1: Registrar Participantes</h2>
-            <div class="flex flex-col sm:flex-row gap-3">
-                <input type="text" id="nombreUsuario" placeholder="Nombre del participante" class="flex-1 h-11 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="agregarUsuario()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors shadow-sm">Guardar Jugador</button>
-            </div>
-            <p id="mensajeEstado" class="text-sm mt-3 font-medium text-slate-500"></p>
-        </div>
-
-        <div class="border border-slate-200 rounded-xl p-6 bg-white">
-            <h2 class="text-md font-bold text-slate-700 mb-3">Participantes:</h2>
-            <ul id="listaUsuarios" class="list-disc list-inside space-y-2 text-slate-600">
-                <li class="text-slate-400 italic">Cargando...</li>
-            </ul>
-        </div>
-    </div>
-
-    <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <h1 class="text-3xl font-extrabold text-slate-800 text-center mb-8">🏆 Mi Quiniela Mundial 2026 ⚽</h1>
+        
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6 text-center">
-            <button onclick="sincronizarResultadosInternet()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-base">
+            <button onclick="sincronizarResultadosInternet()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md">
                 🔄 Sincronizar Calendario y Marcadores
             </button>
             <p id="mensajeAPI" class="text-sm mt-3 font-medium text-slate-600"></p>
         </div>
-        <div id="listaPartidos" class="space-y-4"></div>
+
+        <div id="listaPartidos" class="space-y-4">
+            <p class="text-center text-slate-400 italic">Presiona el botón para cargar partidos...</p>
+        </div>
     </div>
 
     <script>
@@ -48,28 +31,18 @@
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        async function cargarUsuarios() {
-            const lista = document.getElementById('listaUsuarios');
-            const { data } = await supabaseClient.from('usuarios').select('*').order('nombre', { ascending: true });
-            lista.innerHTML = data?.length ? data.map(u => `<li>${u.nombre}</li>`).join('') : '<li>No hay jugadores.</li>';
-        }
-
-        async function agregarUsuario() {
-            const nombre = document.getElementById('nombreUsuario').value.trim();
-            if (!nombre) return;
-            await supabaseClient.from('usuarios').insert([{ nombre: nombre, rol: 'jugador' }]);
-            document.getElementById('nombreUsuario').value = '';
-            cargarUsuarios();
-        }
-
         async function cargarPartidosLocalmente() {
             const { data } = await supabaseClient.from('partidos').select('*').order('id', { ascending: true });
             const cont = document.getElementById('listaPartidos');
-            cont.innerHTML = data?.map(p => `
-                <div class="p-4 bg-slate-50 rounded-xl border flex justify-between">
-                    <span>${p.equipo_1} vs ${p.equipo_2}</span>
-                    <span class="font-black">${p.goles_1 ?? '-'} : ${p.goles_2 ?? '-'}</span>
-                </div>`).join('') || '<p>Presiona sincronizar.</p>';
+            if (data && data.length > 0) {
+                cont.innerHTML = data.map(p => `
+                    <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                        <span class="font-semibold text-slate-700">${p.equipo_local} vs ${p.equipo_visitante}</span>
+                        <span class="font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
+                            ${p.goles_local ?? '-'} : ${p.goles_visitante ?? '-'}
+                        </span>
+                    </div>`).join('');
+            }
         }
 
         async function sincronizarResultadosInternet() {
@@ -89,22 +62,23 @@
 
                 for (const juego of datos.matches) {
                     const terminado = juego.status === "FINISHED";
-                    await supabaseClient.from('partidos').upsert({
-                        equipo_1: juego.homeTeam.name,
-                        equipo_2: juego.awayTeam.name,
-                        goles_1: terminado ? juego.score.fullTime.home : null,
-                        goles_2: terminado ? juego.score.fullTime.away : null,
-                        jugado: terminado
-                    }, { onConflict: 'equipo_1,equipo_2' });
+                    
+                    // Insertando con los nombres de columna correctos de tu base de datos
+                    await supabaseClient.from('partidos').insert([{ 
+                        equipo_local: juego.homeTeam.name,
+                        equipo_visitante: juego.awayTeam.name,
+                        goles_local: terminado ? juego.score.fullTime.home : null,
+                        goles_visitante: terminado ? juego.score.fullTime.away : null,
+                        jugado: terminado 
+                    }]);
                 }
-                msg.innerText = "✅ Sincronizado!";
+                msg.innerText = "✅ ¡Sincronizado con éxito!";
                 cargarPartidosLocalmente();
             } catch (error) {
                 msg.innerText = "❌ Error: " + error.message;
             }
         }
 
-        cargarUsuarios();
         cargarPartidosLocalmente();
     </script>
 </body>
