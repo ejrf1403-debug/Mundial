@@ -2,33 +2,41 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Mi Quiniela</title>
+    <title>Quiniela 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <button id="btnSync" onclick="sincronizar()" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
+        <button id="btnSync" onclick="iniciarSincronizacion()" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
             🔄 Sincronizar Partidos
         </button>
-        <p id="status" class="mt-4 text-center"></p>
+        <p id="status" class="mt-4 text-center font-mono text-sm"></p>
     </div>
 
     <script>
         const supabase = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
         const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
 
-        async function sincronizar() {
+        async function iniciarSincronizacion() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Conectando...";
+            status.innerText = "1. Iniciando petición...";
+            
             try {
-                const res = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches'), {
+                // Usamos un proxy diferente y más directo
+                const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches');
+                
+                status.innerText = "2. Conectando con API...";
+                const res = await fetch(url, {
                     headers: { 'X-Auth-Token': API_KEY }
                 });
-                const data = await res.json();
+
+                if (!res.ok) throw new Error("Error de API: " + res.status);
                 
-                for (const m of data.matches) {
-                    // AQUÍ ESTÁ LA CORRECCIÓN: usamos los nombres exactos de tu tabla
+                const data = await res.json();
+                status.innerText = "3. Datos recibidos. Guardando en Supabase...";
+
+                for (const m of data.matches.slice(0, 5)) { // Guardamos solo 5 para probar
                     await supabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
                         equipo_visitante: m.awayTeam.name,
@@ -36,9 +44,10 @@
                         goles_visitante: m.score.fullTime.away
                     }]);
                 }
-                status.innerText = "✅ ¡Sincronizado!";
+                status.innerText = "✅ ¡Éxito! Partidos guardados.";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
+                console.error(e);
             }
         }
     </script>
