@@ -16,31 +16,34 @@
                 <option value="">Selecciona un participante...</option>
             </select>
             
-            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
+            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos y Tabla</button>
             <div id="status" class="mt-4"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
+            <div id="leaderboard" class="space-y-2"></div>
         </div>
     </div>
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        // 1. Cargar Usuarios en el select
+        // 1. Cargar lista de usuarios
         async function cargarUsuarios() {
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
-            data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
         }
 
-        // 2. Cargar pronósticos y LIMPIAR antes
+        // 2. Cargar pronósticos de un usuario específico
         async function cargarPronosticos() {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
             
-            // Limpieza profunda de todos los inputs
             document.querySelectorAll('input[type="number"]').forEach(i => i.value = "");
             
             const { data } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', nombre);
-            
             data?.forEach(p => {
                 const iL = document.getElementById(`l-${p.partido_id}`);
                 const iV = document.getElementById(`v-${p.partido_id}`);
@@ -49,7 +52,7 @@
             });
         }
 
-        // 3. Guardar cambios
+        // 3. Guardar pronóstico
         async function guardarPronostico(partidoId, inputL, inputV) {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) { alert("¡Selecciona a un participante primero!"); return; }
@@ -62,32 +65,34 @@
             }, { onConflict: 'nombre_usuario, partido_id' });
 
             error ? alert("❌ Error: " + error.message) : alert("✅ Actualizado: " + nombre);
+            calcularPosiciones(); // Refresca tabla al guardar
         }
 
-        // 4. Renderizar lista de partidos
-        document.getElementById('btnLoad').addEventListener('click', async () => {
+        // 4. Calcular tabla de posiciones
+        async function calcularPosiciones() {
             const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-            const data = await res.json();
-            let html = '<div class="space-y-2">';
+            const dataRes = await res.json();
+            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
             
-            data.matches.forEach(m => {
-                html += `
-                    <div class="flex items-center justify-between p-2 border-b text-xs hover:bg-gray-50">
-                        <span class="w-1/2 truncate font-semibold">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                        <div class="flex gap-1">
-                            <input type="number" id="l-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="L">
-                            <input type="number" id="v-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="V">
-                            <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
-                            class="bg-green-600 text-white px-2 py-1 rounded font-bold">OK</button>
-                        </div>
-                    </div>`;
-            });
-            document.getElementById('status').innerHTML = html + '</div>';
-            // Una vez cargados los inputs, si ya había un usuario seleccionado, cargamos sus datos
-            cargarPronosticos();
-        });
+            let scores = {};
+            pronosticos?.forEach(p => {
+                const partidoReal = dataRes.matches.find(m => m.id == p.partido_id);
+                if (!partidoReal || partidoReal.status !== 'FINISHED') return;
 
-        cargarUsuarios();
-    </script>
-</body>
-</html>
+                if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+
+                const realL = partidoReal.score.fullTime.home;
+                const realV = partidoReal.score.fullTime.away;
+
+                if (p.pronostico_local === realL && p.pronostico_visitante === realV) scores[p.nombre_usuario] += 3;
+                else if ((p.pronostico_local > p.pronostico_visitante && realL > realV) || 
+                         (p.pronostico_local < p.pronostico_visitante && realL < realV) ||
+                         (p.pronostico_local === p.pronostico_visitante && realL === realV)) scores[p.nombre_usuario] += 1;
+            });
+
+            document.getElementById('leaderboard').innerHTML = Object.entries(scores)
+                .sort((a, b) => b[1] - a[1])
+                .map(([nombre, pts]) => `
+                    <div class="flex justify-between p-3 bg-gray-50 border rounded">
+                        <span class="font-bold">${nombre}</span>
+                        <span class="bg-blue-600 text-white px-3
