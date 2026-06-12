@@ -74,43 +74,4 @@
                 }
 
                 return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
-                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
-                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${estaOculto}">OK</button>
-                </div>`;
-            }).join('');
-
-            let scores = {};
-            pronosticos?.forEach(p => {
-                const m = dataPartidos.matches.find(x => x.id == p.partido_id);
-                if (m?.status === 'FINISHED') {
-                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
-                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (!isNaN(pL)) {
-                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
-                    }
-                }
-            });
-            document.getElementById('leaderboard').innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s]) => 
-                `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${s} pts</b></div>`).join('');
-        }
-
-        async function guardar(id) {
-            const nombre = document.getElementById('userSelector').value;
-            await cliente.from('pronosticos').upsert({
-                nombre_usuario: nombre, partido_id: String(id),
-                pronostico_local: parseInt(document.getElementById('l-'+id).value),
-                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
-            }, { onConflict: 'nombre_usuario, partido_id' });
-            alert("Guardado");
-            cargarTodo();
-        }
-
-        document.getElementById('btnLoad').onclick = cargarTodo;
-        init();
-    </script>
-</body>
-</html>
+                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m
