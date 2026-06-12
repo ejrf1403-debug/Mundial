@@ -15,13 +15,13 @@
                     <option value="">Selecciona un participante...</option>
                 </select>
                 <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
-                <div id="status" class="mt-4 text-sm text-center"></div>
+                <div id="status" class="mt-4 text-sm"></div>
             </div>
         </div>
         <div class="md:col-span-1">
             <div class="bg-white p-6 rounded-xl shadow sticky top-6">
-                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla</h2>
-                <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Esperando...</div>
+                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
+                <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Cargando posiciones...</div>
             </div>
         </div>
     </div>
@@ -30,59 +30,58 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            try {
-                const { data } = await cliente.from('usuarios').select('nombre');
-                const sel = document.getElementById('userSelector');
-                data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-                
-                const userParam = new URLSearchParams(window.location.search).get('usuario');
-                if (userParam) {
-                    sel.value = userParam;
-                    cargarTodo();
-                }
-            } catch (e) { console.error("Error inicial:", e); }
+            const { data } = await cliente.from('usuarios').select('nombre');
+            const sel = document.getElementById('userSelector');
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            const userParam = new URLSearchParams(window.location.search).get('usuario');
+            if (userParam) { sel.value = userParam; cargarTodo(); }
         }
 
         async function cargarTodo() {
             const status = document.getElementById('status');
+            const lb = document.getElementById('leaderboard');
             const nombre = document.getElementById('userSelector').value;
-            if (!nombre) { alert("Selecciona un usuario"); return; }
+            if (!nombre) return;
             
-            status.innerHTML = "Cargando datos...";
-            try {
-                const [resPartidos, {data: pronosticos, error}] = await Promise.all([
-                    fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
-                    cliente.from('pronosticos').select('*')
-                ]);
-                
-                if (error) throw error;
-                const dataPartidos = await resPartidos.json();
-                
-                // ... (El resto de la lógica de renderizado igual)
-                renderizar(dataPartidos, pronosticos, nombre);
-            } catch (e) {
-                status.innerHTML = "❌ Error: " + e.message;
-                console.error(e);
-            }
-        }
-
-        function renderizar(dataPartidos, pronosticos, nombre) {
+            status.innerHTML = "Cargando...";
+            const [resPartidos, {data: pronosticos}] = await Promise.all([
+                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
+                cliente.from('pronosticos').select('*')
+            ]);
+            
+            const dataPartidos = await resPartidos.json();
+            const ahora = new Date().getTime();
             const urlParams = new URLSearchParams(window.location.search);
             const esDueno = (urlParams.get('usuario') === nombre);
-            const ahora = new Date().getTime();
-            
-            document.getElementById('status').innerHTML = dataPartidos.matches.map(m => {
+
+            // Renderizar partidos
+            status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                 const bloqueado = (ahora >= new Date(m.utcDate).getTime() || !esDueno) ? 'disabled' : '';
                 const hide = (ahora >= new Date(m.utcDate).getTime() || !esDueno) ? 'hidden' : '';
 
-                return `<div class="flex justify-between p-2 border-b">
-                    <span>${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                return `<div class="flex justify-between items-center p-2 border-b text-xs">
+                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
                     <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-8 border text-center" ${bloqueado}>
                     <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-8 border text-center" ${bloqueado}>
-                    <button onclick="guardar('${m.id}')" class="bg-green-500 text-white px-2 ${hide}">OK</button>
+                    <button onclick="guardar('${m.id}')" class="bg-green-500 text-white px-2 rounded ${hide}">OK</button>
                 </div>`;
             }).join('');
+
+            // Renderizar tabla
+            let scores = {};
+            pronosticos?.forEach(p => {
+                const m = dataPartidos.matches.find(x => x.id == p.partido_id);
+                if (m?.status === 'FINISHED') {
+                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                }
+            });
+            lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s]) => 
+                `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${s} pts</b></div>`).join('');
         }
 
         async function guardar(id) {
