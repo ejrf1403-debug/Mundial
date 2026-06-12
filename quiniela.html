@@ -21,7 +21,10 @@
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        // Cargar usuarios al inicio
+        // --- CONFIGURACIÓN DE ADMIN ---
+        // Cambia "TU_NOMBRE" por el nombre exacto que aparece en tu lista
+        const nombreAdmin = "Emmanuel"; 
+
         async function init() {
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
@@ -34,14 +37,20 @@
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) { alert("¡Selecciona tu nombre primero!"); return; }
 
+            // Lógica de Administrador
+            const esAdmin = (nombre === nombreAdmin);
             const diff = (new Date(horaPartido) - new Date()) / 1000 / 60;
-            if (diff <= 30) { alert("🚫 Bloqueado: Ya pasaron los 30 min previos al juego."); return; }
+            
+            if (diff <= 30 && !esAdmin) {
+                alert("🚫 Bloqueado: Ya pasaron los 30 min previos al juego.");
+                return;
+            }
 
             const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre,
-                partido_id: partidoId,
-                pronostico_local: parseInt(inputL.value),
-                pronostico_visitante: parseInt(inputV.value)
+                partido_id: String(partidoId),
+                pronostico_local: parseInt(inputL.value) || 0,
+                pronostico_visitante: parseInt(inputV.value) || 0
             }, { onConflict: 'nombre_usuario, partido_id' });
 
             error ? alert("Error: " + error.message) : alert("✅ Pronóstico guardado!");
@@ -51,17 +60,18 @@
             const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
             const data = await res.json();
             let html = '<div class="space-y-4">';
+            
             data.matches.forEach(m => {
                 html += `
                     <div class="border p-3 rounded flex flex-col gap-2">
                         <span class="text-xs text-gray-500">${new Date(m.utcDate).toLocaleString()}</span>
                         <div class="flex justify-between items-center">
-                            <span>${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                            <span class="text-sm font-semibold">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
                             <div class="flex gap-2">
-                                <input type="number" id="l-${m.id}" class="w-12 border p-1" placeholder="0">
-                                <input type="number" id="v-${m.id}" class="w-12 border p-1" placeholder="0">
+                                <input type="number" id="l-${m.id}" class="w-12 border p-1 rounded" placeholder="0">
+                                <input type="number" id="v-${m.id}" class="w-12 border p-1 rounded" placeholder="0">
                                 <button onclick="guardarPronostico('${m.id}', '${m.utcDate}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
-                                class="bg-green-600 text-white px-2 py-1 rounded text-xs">Guardar</button>
+                                class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">Guardar</button>
                             </div>
                         </div>
                     </div>`;
