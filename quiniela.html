@@ -136,8 +136,10 @@
             textoMensaje.innerText = "⏳ Conectando con los servidores del Mundial...";
 
             try {
-                const respuesta = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
-                    headers: { 'X-Auth-Token': FOOTBALL_API_KEY }
+                const proxyUrl = 'https://corsproxy.io/?';
+const apiUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
+const respuesta = await fetch(proxyUrl + encodeURIComponent(apiUrl), { headers: { 'X-Auth-Token': FOOTBALL_API_KEY }
+});
                 });
                 
                 if (!respuesta.ok) throw new Error("La llave es inválida o expiró el límite diario.");
