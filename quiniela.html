@@ -8,9 +8,9 @@
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Sincronización Directa</h1>
+        <h1 class="text-xl font-bold mb-4">Sincronización de Datos</h1>
         <button id="btnSync" class="w-full bg-green-600 text-white p-4 rounded-lg font-bold">
-            🚀 Sincronizar desde Navegador
+            🚀 Sincronizar desde Servidor
         </button>
         <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
     </div>
@@ -23,28 +23,30 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Llamando a la API desde tu navegador...";
+            status.innerText = "⏳ Probando conexión con API...";
 
             try {
-                // LLAMADA DIRECTA (Sin pasar por el servidor de Supabase)
-                const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+                // Usamos la lista de competiciones generales (endpoint gratuito)
+                const res = await fetch('https://api.football-data.org/v4/competitions', {
                     headers: { 'X-Auth-Token': '8bd17a06ad9c42b8940faa3869f2ed55' }
                 });
 
-                if (!res.ok) throw new Error("La API rechazó la conexión directa: " + res.status);
+                if (!res.ok) throw new Error("Error " + res.status + ": Acceso denegado o endpoint no encontrado.");
                 
                 const data = await res.json();
-                status.innerText = "✅ Datos recibidos. Guardando en Supabase...";
+                status.innerText = "✅ ¡Conectado! Verificando ligas...";
+                console.log("Datos recibidos:", data);
 
-                for (const m of data.matches.slice(0, 5)) {
-                    await clienteSupabase.from('partidos').insert([{ 
-                        equipo_local: m.homeTeam.name,
-                        equipo_visitante: m.awayTeam.name,
-                        goles_local: m.score.fullTime.home ?? 0,
-                        goles_visitante: m.score.fullTime.away ?? 0
-                    }]);
-                }
-                status.innerText = "¡Sincronización completa!";
+                // Si llegamos aquí, la conexión funciona. 
+                // Ahora intentamos insertar algo básico para probar la base de datos
+                const { error } = await clienteSupabase.from('partidos').insert([
+                    { equipo_local: 'Test Local', equipo_visitante: 'Test Visitante', goles_local: 0, goles_visitante: 0 }
+                ]);
+
+                if (error) throw new Error("Error en Supabase: " + error.message);
+                
+                status.innerText = "¡Prueba exitosa! Conexión verificada.";
+
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
             }
