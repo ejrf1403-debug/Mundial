@@ -9,14 +9,17 @@
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
         <h1 class="text-xl font-bold mb-4">Quiniela Mundial 2026</h1>
-        <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
+        
+        <button id="btnSync" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold transition">
             🚀 Cargar Partidos
         </button>
-        <div id="status" class="mt-4 text-slate-700"></div>
+        
+        <div id="status" class="mt-6 text-slate-800">
+            </div>
     </div>
 
     <script>
-        // Inicialización única
+        // Inicialización del cliente Supabase
         const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -24,34 +27,40 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerHTML = "⏳ Conectando con servidor y cargando partidos...";
+            status.innerHTML = '<p class="text-blue-600 font-mono italic">⏳ Conectando con servidor...</p>';
 
             try {
-                // Llamada a tu Edge Function
                 const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
                 
                 if (!res.ok) throw new Error("Error en servidor: " + res.status);
                 
                 const data = await res.json();
                 
-                // Mostrar resultados en una lista
-                let html = '<h2 class="font-bold mt-4 mb-2">Próximos partidos:</h2><ul class="space-y-2">';
-                data.matches.slice(0, 10).forEach(m => {
-                    html += `
-                        <li class="bg-slate-50 p-3 rounded border">
-                            <span class="font-semibold">${m.homeTeam.name}</span> 
-                            <span class="text-slate-500">vs</span> 
-                            <span class="font-semibold">${m.awayTeam.name}</span>
-                            <br><small class="text-xs text-blue-600">${new Date(m.utcDate).toLocaleString()}</small>
-                        </li>`;
-                });
-                html += '</ul>';
+                // Construcción visual de la lista
+                let html = '<div class="space-y-3">';
+                html += '<h2 class="font-bold text-lg text-green-600">✅ ¡Sincronización exitosa!</h2>';
                 
-                status.innerHTML = "✅ ¡Sincronización exitosa!<br>" + html;
+                if (data.matches && data.matches.length > 0) {
+                    data.matches.slice(0, 10).forEach(m => {
+                        html += `
+                            <div class="p-4 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-slate-800">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
+                                    <p class="text-xs text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
+                                </div>
+                                <span class="text-xs font-bold bg-slate-100 px-2 py-1 rounded">${m.status}</span>
+                            </div>`;
+                    });
+                } else {
+                    html += '<p>No se encontraron partidos disponibles.</p>';
+                }
+                html += '</div>';
+                
+                status.innerHTML = html;
                 
             } catch (e) {
-                status.innerText = "❌ Error: " + e.message;
-                console.error(e);
+                status.innerHTML = '<p class="text-red-600 font-bold">❌ Error: ' + e.message + '</p>';
+                console.error("Detalle del error:", e);
             }
         }
 
