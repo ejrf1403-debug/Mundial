@@ -8,11 +8,11 @@
 </head>
 <body class="bg-slate-100 p-4">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-2xl font-bold text-center mb-6">🏆 Quiniela Mundial</h1>
+        <h1 class="text-2xl font-bold text-center mb-6">🏆 Quiniela Mundial 2026</h1>
         
-        <select id="userSelector" class="w-full p-3 border rounded-lg mb-6 font-bold text-blue-700">
-            <option value="">Selecciona tu nombre...</option>
-        </select>
+        <div class="bg-blue-50 p-4 rounded-lg mb-6 border-l-4 border-blue-600">
+            <p class="text-blue-800 font-bold">Sesión activa como: <span id="nombreUser">Emmanuel</span></p>
+        </div>
         
         <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
         <div id="status" class="mt-8"></div>
@@ -21,30 +21,11 @@
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        // --- CONFIGURACIÓN DE ADMIN ---
-        // Cambia "TU_NOMBRE" por el nombre exacto que aparece en tu lista
-        const nombreAdmin = "Emmanuel"; 
-
-        async function init() {
-            const { data } = await cliente.from('usuarios').select('nombre');
-            const sel = document.getElementById('userSelector');
-            data.forEach(u => {
-                sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
-            });
-        }
-
         async function guardarPronostico(partidoId, horaPartido, inputL, inputV) {
-            const nombre = document.getElementById('userSelector').value;
-            if (!nombre) { alert("¡Selecciona tu nombre primero!"); return; }
+            const nombre = "Emmanuel"; // Nombre forzado para el Administrador
 
-            // Lógica de Administrador
-            const esAdmin = (nombre === nombreAdmin);
-            const diff = (new Date(horaPartido) - new Date()) / 1000 / 60;
-            
-            if (diff <= 30 && !esAdmin) {
-                alert("🚫 Bloqueado: Ya pasaron los 30 min previos al juego.");
-                return;
-            }
+            // Lógica de fuerza bruta para Admin
+            console.log("Guardando como:", nombre);
 
             const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre,
@@ -53,7 +34,12 @@
                 pronostico_visitante: parseInt(inputV.value) || 0
             }, { onConflict: 'nombre_usuario, partido_id' });
 
-            error ? alert("Error: " + error.message) : alert("✅ Pronóstico guardado!");
+            if (error) {
+                alert("❌ Error: " + error.message);
+                console.error(error);
+            } else {
+                alert("✅ Pronóstico guardado exitosamente!");
+            }
         }
 
         document.getElementById('btnLoad').addEventListener('click', async () => {
@@ -63,23 +49,21 @@
             
             data.matches.forEach(m => {
                 html += `
-                    <div class="border p-3 rounded flex flex-col gap-2">
-                        <span class="text-xs text-gray-500">${new Date(m.utcDate).toLocaleString()}</span>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm font-semibold">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                            <div class="flex gap-2">
-                                <input type="number" id="l-${m.id}" class="w-12 border p-1 rounded" placeholder="0">
-                                <input type="number" id="v-${m.id}" class="w-12 border p-1 rounded" placeholder="0">
-                                <button onclick="guardarPronostico('${m.id}', '${m.utcDate}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
-                                class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">Guardar</button>
-                            </div>
+                    <div class="border p-3 rounded flex justify-between items-center bg-white shadow-sm">
+                        <div class="text-xs">
+                            <p class="font-bold">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
+                            <p class="text-gray-400">${new Date(m.utcDate).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="number" id="l-${m.id}" class="w-10 border p-1 rounded" placeholder="0">
+                            <input type="number" id="v-${m.id}" class="w-10 border p-1 rounded" placeholder="0">
+                            <button onclick="guardarPronostico('${m.id}', '${m.utcDate}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
+                            class="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">Guardar</button>
                         </div>
                     </div>`;
             });
             document.getElementById('status').innerHTML = html + '</div>';
         });
-
-        init();
     </script>
 </body>
 </html>
