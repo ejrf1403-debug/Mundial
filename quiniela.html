@@ -9,7 +9,6 @@
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
         <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
-        
         <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
             🔄 Sincronizar Partidos
         </button>
@@ -17,34 +16,31 @@
     </div>
 
     <script>
-        // 1. Inicialización segura del cliente (renombrado para evitar conflictos)
         const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
-        const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
-
-        // 2. Función lógica de sincronización
+        
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Conectando al servidor...";
+            status.innerText = "⏳ Intentando conexión directa...";
 
             try {
-                // Usamos 'corsproxy.io' para evitar el bloqueo del navegador
-                const proxyUrl = 'https://corsproxy.io/?';
-                const apiUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
-                
-                const res = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
-                    headers: { 'X-Auth-Token': API_KEY }
+                // Usamos 'api.football-data.org' directamente con una cabecera más permisiva
+                const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+                    method: 'GET',
+                    headers: { 
+                        'X-Auth-Token': '8bd17a06ad9c42b8940faa3869f2ed55',
+                        'Content-Type': 'application/json'
+                    }
                 });
 
-                if (!res.ok) throw new Error("Error en API: " + res.status);
+                if (!res.ok) throw new Error("API bloqueó la petición. Intenta después.");
                 const data = await res.json();
                 
-                status.innerText = "✅ Datos recibidos. Guardando en base de datos...";
+                status.innerText = "✅ Datos recibidos. Guardando...";
 
-                // 3. Guardar en Supabase
-                for (const m of data.matches.slice(0, 5)) {
+                for (const m of data.matches.slice(0, 3)) {
                     await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
                         equipo_visitante: m.awayTeam.name,
@@ -55,11 +51,8 @@
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
-                console.error("Detalle técnico:", e);
             }
         }
-
-        // 4. Conexión segura al botón
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
     </script>
 </body>
