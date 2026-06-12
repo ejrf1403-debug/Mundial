@@ -8,13 +8,13 @@
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Quiniela Mundial 2026</h1>
+        <h1 class="text-xl font-bold mb-4 text-slate-800">Quiniela Mundial 2026</h1>
         
         <button id="btnSync" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold transition">
             🚀 Cargar Partidos
         </button>
         
-        <div id="status" class="mt-6 text-slate-800">
+        <div id="status" class="mt-6">
             </div>
     </div>
 
@@ -27,7 +27,7 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerHTML = '<p class="text-blue-600 font-mono italic">⏳ Conectando con servidor...</p>';
+            status.innerHTML = '<p class="text-blue-600 font-mono italic text-center">⏳ Obteniendo datos del Mundial...</p>';
 
             try {
                 const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
@@ -38,28 +38,37 @@
                 
                 // Construcción visual de la lista
                 let html = '<div class="space-y-3">';
-                html += '<h2 class="font-bold text-lg text-green-600">✅ ¡Sincronización exitosa!</h2>';
+                html += '<h2 class="font-bold text-lg text-green-600 mb-4">✅ Partidos Recientes:</h2>';
                 
                 if (data.matches && data.matches.length > 0) {
+                    // Procesamos los primeros 10 partidos
                     data.matches.slice(0, 10).forEach(m => {
+                        const homeScore = m.score.fullTime.home !== null ? m.score.fullTime.home : "-";
+                        const awayScore = m.score.fullTime.away !== null ? m.score.fullTime.away : "-";
+                        const statusText = m.status === 'FINISHED' ? 'Terminado' : 'Programado';
+                        const statusColor = m.status === 'FINISHED' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600';
+
                         html += `
                             <div class="p-4 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center">
-                                <div>
+                                <div class="w-2/3">
                                     <p class="font-bold text-slate-800">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
                                     <p class="text-xs text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
                                 </div>
-                                <span class="text-xs font-bold bg-slate-100 px-2 py-1 rounded">${m.status}</span>
+                                <div class="text-right">
+                                    <p class="font-black text-lg text-blue-700">${homeScore} - ${awayScore}</p>
+                                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${statusColor}">${statusText}</span>
+                                </div>
                             </div>`;
                     });
                 } else {
-                    html += '<p>No se encontraron partidos disponibles.</p>';
+                    html += '<p class="text-center">No se encontraron partidos disponibles.</p>';
                 }
                 html += '</div>';
                 
                 status.innerHTML = html;
                 
             } catch (e) {
-                status.innerHTML = '<p class="text-red-600 font-bold">❌ Error: ' + e.message + '</p>';
+                status.innerHTML = '<p class="text-red-600 font-bold text-center">❌ Error: ' + e.message + '</p>';
                 console.error("Detalle del error:", e);
             }
         }
