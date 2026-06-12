@@ -17,19 +17,21 @@
     </div>
 
     <script>
-        // 1. Renombramos la variable a 'clienteSupabase' para evitar el conflicto
+        // 1. Inicialización segura del cliente (renombrado para evitar conflictos)
         const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
         const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
 
+        // 2. Función lógica de sincronización
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Conectando...";
+            status.innerText = "⏳ Conectando al servidor...";
 
             try {
-                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                // Usamos 'corsproxy.io' para evitar el bloqueo del navegador
+                const proxyUrl = 'https://corsproxy.io/?';
                 const apiUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
                 
                 const res = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
@@ -39,9 +41,9 @@
                 if (!res.ok) throw new Error("Error en API: " + res.status);
                 const data = await res.json();
                 
-                status.innerText = "✅ Datos recibidos. Guardando...";
+                status.innerText = "✅ Datos recibidos. Guardando en base de datos...";
 
-                // 2. Usamos 'clienteSupabase' para enviar los datos
+                // 3. Guardar en Supabase
                 for (const m of data.matches.slice(0, 5)) {
                     await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
@@ -53,10 +55,11 @@
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
+                console.error("Detalle técnico:", e);
             }
         }
 
-        // 3. Conexión segura al botón
+        // 4. Conexión segura al botón
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
     </script>
 </body>
