@@ -27,17 +27,14 @@
     </div>
 
     <script>
-        // Inicialización directa
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            try {
-                const { data } = await cliente.from('usuarios').select('nombre');
-                const sel = document.getElementById('userSelector');
-                data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-                const userParam = new URLSearchParams(window.location.search).get('usuario');
-                if (userParam) { sel.value = userParam; await cargarTodo(); }
-            } catch (err) { console.error("Error init:", err); }
+            const { data } = await cliente.from('usuarios').select('nombre');
+            const sel = document.getElementById('userSelector');
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            const userParam = new URLSearchParams(window.location.search).get('usuario');
+            if (userParam) { sel.value = userParam; await cargarTodo(); }
         }
 
         async function cargarTodo() {
@@ -46,59 +43,72 @@
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
             
-            status.innerHTML = "Cargando...";
-            try {
-                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-                const dataPartidos = await res.json();
-                const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+            const [res, {data: pronosticos}] = await Promise.all([
+                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
+                cliente.from('pronosticos').select('*')
+            ]);
+            const dataPartidos = await res.json();
+            
+            const ahora = Date.now();
+            const urlParams = new URLSearchParams(window.location.search);
+            const esEmmanuel = (urlParams.get('usuario') === 'Emmanuel');
+            const esDueno = (urlParams.get('usuario') === nombre);
+
+            status.innerHTML = dataPartidos.matches.map(m => {
+                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
+                const fecha = new Date(m.utcDate).getTime();
                 
-                const ahora = Date.now();
-                const esEmmanuel = (new URLSearchParams(window.location.search).get('usuario') === 'Emmanuel');
-                const esDueno = (new URLSearchParams(window.location.search).get('usuario') === nombre);
+                // Color calculado SIEMPRE si el partido terminó
+                let color = '';
+                if (m.status === 'FINISHED' && p) {
+                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (pL === rL && pV === rV) color = 'bg-green-300';
+                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                    else color = 'bg-red-300';
+                }
 
-                status.innerHTML = dataPartidos.matches.map(m => {
-                    const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
-                    const bloqueado = esEmmanuel ? '' : (ahora >= new Date(m.utcDate).getTime() || !esDueno ? 'disabled' : '');
-                    const hide = esEmmanuel ? '' : (ahora >= new Date(m.utcDate).getTime() || !esDueno ? 'hidden' : '');
+                const bloqueado = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'disabled' : '');
+                const hide = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'hidden' : '');
 
-                    return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
-                        <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded" ${bloqueado}>
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded" ${bloqueado}>
-                        <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${hide}">OK</button>
-                    </div>`;
-                }).join('');
+                return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
+                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                    <input type="number" value="${p?.pronostico_local ?? ''}" id="l-${m.id}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
+                    <input type="number" value="${p?.pronostico_visitante ?? ''}" id="v-${m.id}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${hide}">OK</button>
+                </div>`;
+            }).join('');
 
-                // Tabla
-                let scores = {};
-                pronosticos?.forEach(p => {
-                    const m = dataPartidos.matches.find(x => x.id == p.partido_id);
-                    if (m?.status === 'FINISHED') {
-                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                        const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
-                        const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (!isNaN(pL)) {
+            // Tabla (recalculo los puntos para todos)
+            let scores = {};
+            dataPartidos.matches.forEach(m => {
+                if (m.status === 'FINISHED') {
+                    pronosticos?.forEach(p => {
+                        if (p.partido_id == m.id) {
+                            if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                            const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                            const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
                             if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
                             else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
                         }
-                    }
-                });
-                lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => 
-                    `<div class="flex justify-between items-center p-2 ${i==0?'bg-yellow-400':i==1?'bg-gray-300':i==2?'bg-amber-600 text-white':''} border rounded">
-                        <span>${i+1}. ${n}</span><b>${s} pts</b>
-                    </div>`).join('');
-            } catch (err) { status.innerHTML = "Error: " + err.message; }
+                    });
+                }
+            });
+            lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => 
+                `<div class="flex justify-between items-center p-2 ${i==0?'bg-yellow-400':i==1?'bg-gray-300':i==2?'bg-amber-600 text-white':''} border rounded">
+                    <span>${i+1}. ${n}</span><b>${s} pts</b>
+                </div>`).join('');
         }
 
         async function guardar(id) {
             const nombre = document.getElementById('userSelector').value;
-            const { error } = await cliente.from('pronosticos').upsert({
+            await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre, partido_id: String(id),
                 pronostico_local: parseInt(document.getElementById('l-'+id).value),
                 pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
             }, { onConflict: 'nombre_usuario, partido_id' });
-            if (!error) { alert("Guardado"); cargarTodo(); }
-            else alert("Error al guardar: " + error.message);
+            alert("Guardado");
+            cargarTodo();
         }
 
         document.getElementById('btnLoad').onclick = cargarTodo;
