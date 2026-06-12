@@ -9,38 +9,37 @@
 <body class="bg-slate-100 p-4">
     <div class="max-w-2xl mx-auto space-y-6">
         <div class="bg-white p-6 rounded-xl shadow">
-            <h1 class="text-xl font-bold mb-4">🛠 Panel de Administración</h1>
-            <select id="userSelector" onchange="cargarPronosticos()" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600">
-                <option value="">Selecciona un participante para editar...</option>
+            <h1 class="text-xl font-bold mb-4 text-center">🛠 Panel de Administración</h1>
+            
+            <label class="block text-sm font-bold mb-1">Editar pronósticos de:</label>
+            <select id="userSelector" onchange="cargarPronosticos()" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
+                <option value="">Selecciona un participante...</option>
             </select>
+            
             <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
             <div id="status" class="mt-4"></div>
-        </div>
-
-        <div class="bg-white p-6 rounded-xl shadow">
-            <h2 class="text-xl font-bold mb-4">📊 Tabla de Posiciones (Aciertos)</h2>
-            <div id="leaderboard" class="text-sm"></div>
         </div>
     </div>
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        // 1. Cargar Usuarios
+        // 1. Cargar Usuarios en el select
         async function cargarUsuarios() {
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
             data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
         }
 
-        // 2. Cargar pronósticos existentes al cambiar de usuario
+        // 2. Cargar pronósticos y LIMPIAR antes
         async function cargarPronosticos() {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
             
+            // Limpieza profunda de todos los inputs
+            document.querySelectorAll('input[type="number"]').forEach(i => i.value = "");
+            
             const { data } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', nombre);
-            // Limpiar inputs antes de cargar
-            document.querySelectorAll('input').forEach(i => i.value = "");
             
             data?.forEach(p => {
                 const iL = document.getElementById(`l-${p.partido_id}`);
@@ -50,36 +49,42 @@
             });
         }
 
-        // 3. Guardar
+        // 3. Guardar cambios
         async function guardarPronostico(partidoId, inputL, inputV) {
             const nombre = document.getElementById('userSelector').value;
-            if (!nombre) { alert("¡Selecciona a alguien!"); return; }
-            await cliente.from('pronosticos').upsert({
+            if (!nombre) { alert("¡Selecciona a un participante primero!"); return; }
+            
+            const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre,
                 partido_id: String(partidoId),
                 pronostico_local: parseInt(inputL.value) || 0,
                 pronostico_visitante: parseInt(inputV.value) || 0
             }, { onConflict: 'nombre_usuario, partido_id' });
-            alert("✅ Guardado");
+
+            error ? alert("❌ Error: " + error.message) : alert("✅ Actualizado: " + nombre);
         }
 
-        // 4. Cargar Partidos
+        // 4. Renderizar lista de partidos
         document.getElementById('btnLoad').addEventListener('click', async () => {
             const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
             const data = await res.json();
             let html = '<div class="space-y-2">';
+            
             data.matches.forEach(m => {
                 html += `
-                    <div class="flex items-center justify-between p-2 border-b text-xs">
-                        <span class="w-1/3 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                    <div class="flex items-center justify-between p-2 border-b text-xs hover:bg-gray-50">
+                        <span class="w-1/2 truncate font-semibold">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
                         <div class="flex gap-1">
-                            <input type="number" id="l-${m.id}" class="w-8 border text-center">
-                            <input type="number" id="v-${m.id}" class="w-8 border text-center">
-                            <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" class="bg-green-500 text-white px-2 rounded">OK</button>
+                            <input type="number" id="l-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="L">
+                            <input type="number" id="v-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="V">
+                            <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
+                            class="bg-green-600 text-white px-2 py-1 rounded font-bold">OK</button>
                         </div>
                     </div>`;
             });
             document.getElementById('status').innerHTML = html + '</div>';
+            // Una vez cargados los inputs, si ya había un usuario seleccionado, cargamos sus datos
+            cargarPronosticos();
         });
 
         cargarUsuarios();
