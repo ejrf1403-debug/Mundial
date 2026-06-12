@@ -11,7 +11,7 @@
         <div class="bg-white p-6 rounded-xl shadow">
             <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
             
-            <label id="labelUser" class="block text-sm font-bold mb-1">Tu usuario:</label>
+            <label class="block text-sm font-bold mb-1">Tu usuario:</label>
             <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
                 <option value="">Cargando...</option>
             </select>
@@ -22,40 +22,43 @@
 
         <div class="bg-white p-6 rounded-xl shadow">
             <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
-            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Presiona "Cargar Partidos" para ver la tabla.</div>
+            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para ver la tabla.</div>
         </div>
     </div>
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        // 1. Identificar usuario por link o mostrar selector
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const userParam = urlParams.get('usuario');
             const sel = document.getElementById('userSelector');
 
             if (userParam) {
-                // Modo Participante
-                sel.innerHTML = `<option value="${userParam}">${userParam}</option>`;
+                sel.innerHTML = '';
+                let opt = document.createElement('option');
+                opt.value = userParam;
+                opt.textContent = userParam;
+                sel.appendChild(opt);
                 sel.disabled = true;
                 cargarPronosticos();
             } else {
-                // Modo Admin
                 try {
                     const { data } = await cliente.from('usuarios').select('nombre');
                     sel.innerHTML = '<option value="">Selecciona un participante...</option>';
                     data?.forEach(u => {
-                        sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
+                        let opt = document.createElement('option');
+                        opt.value = u.nombre;
+                        opt.textContent = u.nombre;
+                        sel.appendChild(opt);
                     });
                     sel.onchange = cargarPronosticos;
                 } catch (e) {
-                    sel.innerHTML = '<option value="">Error al cargar usuarios</option>';
+                    sel.innerHTML = '<option value="">Error al cargar</option>';
                 }
             }
         }
 
-        // 2. Cargar pronósticos
         async function cargarPronosticos() {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
@@ -69,7 +72,6 @@
             });
         }
 
-        // 3. Guardar
         async function guardarPronostico(pId, iL, iV) {
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) return;
@@ -79,11 +81,10 @@
                 pronostico_local: parseInt(iL.value) || 0,
                 pronostico_visitante: parseInt(iV.value) || 0
             }, { onConflict: 'nombre_usuario, partido_id' });
-            alert("✅ Guardado correctamente");
+            alert("✅ Guardado");
             calcularPosiciones();
         }
 
-        // 4. Calcular Tabla
         async function calcularPosiciones() {
             const lb = document.getElementById('leaderboard');
             try {
@@ -109,7 +110,6 @@
             } catch (e) { lb.innerHTML = "Error calculando puntos."; }
         }
 
-        // 5. Cargar Partidos
         document.getElementById('btnLoad').addEventListener('click', async () => {
             const status = document.getElementById('status');
             status.innerHTML = "Cargando...";
