@@ -31,14 +31,14 @@
             status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Conectando con servidor y BD...</p>';
 
             try {
-                // 1. Obtener Partidos (API) y Participantes (Tabla 'usuarios') en paralelo
+                // 1. Obtener Partidos (API) y usuarios (Tabla 'usuarios') en paralelo
                 const [resApi, resDb] = await Promise.all([
                     fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                     cliente.from('usuarios').select('nombre') 
                 ]);
 
                 const dataPartidos = await resApi.json();
-                const { data: listaParticipantes, error } = resDb;
+                const { data: listaUsuarios, error } = resDb;
 
                 if (error) throw new Error("Error en BD: " + error.message);
 
@@ -47,9 +47,9 @@
                 
                 // Sección Participantes
                 html += `<div>
-                    <h2 class="font-bold text-lg text-slate-800 border-b pb-2">👥 Participantes (${listaParticipantes?.length || 0})</h2>
+                    <h2 class="font-bold text-lg text-slate-800 border-b pb-2">👥 Participantes (${listaUsuario?.length || 0})</h2>
                     <div class="flex flex-wrap gap-2 mt-3">
-                        ${listaParticipantes?.map(p => `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${p.nombre}</span>`).join('')}
+                        ${listaUsuario?.map(p => `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${p.nombre}</span>`).join('')}
                     </div>
                 </div>`;
 
