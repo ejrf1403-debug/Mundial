@@ -10,35 +10,39 @@
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
         <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
         
-        <button onclick="sincronizarPartidos()" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
+        <button id="btnSincronizar" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
             🔄 Sincronizar Calendario y Marcadores
         </button>
         <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
     </div>
 
     <script>
-        // Inicialización única
-        const SUPABASE_URL = "https://vaayxjpzwhesukyzmnez.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm";
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // 1. Inicialización única y segura
+        const supabase = supabase.createClient(
+            "https://vaayxjpzwhesukyzmnez.supabase.co", 
+            "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
+        );
         const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
 
-        async function sincronizarPartidos() {
+        // 2. Función lógica de sincronización
+        async function sincronizar() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Conectando...";
+            status.innerText = "⏳ Conectando y descargando...";
 
             try {
-                // Proxy para evitar bloqueo de CORS
-                const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches');
-                const res = await fetch(url, { headers: { 'X-Auth-Token': API_KEY } });
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const apiUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
                 
+                const res = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
+                    headers: { 'X-Auth-Token': API_KEY }
+                });
+
                 if (!res.ok) throw new Error("Error en API: " + res.status);
                 const data = await res.json();
                 
                 status.innerText = "✅ Datos recibidos. Guardando...";
 
-                // Guardar en Supabase usando los nombres exactos de tus columnas:
-                // equipo_local, equipo_visitante, goles_local, goles_visitante
+                // 3. Iterar y guardar usando los nombres exactos de tus columnas
                 for (const m of data.matches.slice(0, 5)) {
                     await supabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
@@ -50,9 +54,12 @@
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
-                console.error("Error completo:", e);
+                console.error("Detalle del error:", e);
             }
         }
+
+        // 4. Asignar el evento al botón de forma segura
+        document.getElementById('btnSincronizar').addEventListener('click', sincronizar);
     </script>
 </body>
 </html>
