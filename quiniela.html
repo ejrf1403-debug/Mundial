@@ -2,84 +2,45 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Quiniela Mundial 2026</title>
+    <title>Mi Quiniela</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 font-sans p-4 md:p-8 space-y-8">
-
-    <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
-        <h1 class="text-3xl font-extrabold text-slate-800 text-center mb-8">🏆 Mi Quiniela Mundial 2026 ⚽</h1>
-        
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6 text-center">
-            <button onclick="sincronizarResultadosInternet()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md">
-                🔄 Sincronizar Calendario y Marcadores
-            </button>
-            <p id="mensajeAPI" class="text-sm mt-3 font-medium text-slate-600"></p>
-        </div>
-
-        <div id="listaPartidos" class="space-y-4">
-            <p class="text-center text-slate-400 italic">Presiona el botón para cargar partidos...</p>
-        </div>
+<body class="bg-slate-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
+        <button id="btnSync" onclick="sincronizar()" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
+            🔄 Sincronizar Partidos
+        </button>
+        <p id="status" class="mt-4 text-center"></p>
     </div>
 
     <script>
-        const SUPABASE_URL = "https://vaayxjpzwhesukyzmnez.supabase.co"; 
-        const SUPABASE_KEY = "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm";
-        const FOOTBALL_API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55"; 
+        const supabase = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
+        const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
 
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        async function cargarPartidosLocalmente() {
-            const { data } = await supabaseClient.from('partidos').select('*').order('id', { ascending: true });
-            const cont = document.getElementById('listaPartidos');
-            if (data && data.length > 0) {
-                cont.innerHTML = data.map(p => `
-                    <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-                        <span class="font-semibold text-slate-700">${p.equipo_local} vs ${p.equipo_visitante}</span>
-                        <span class="font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
-                            ${p.goles_local ?? '-'} : ${p.goles_visitante ?? '-'}
-                        </span>
-                    </div>`).join('');
-            }
-        }
-
-        async function sincronizarResultadosInternet() {
-            const msg = document.getElementById('mensajeAPI');
-            msg.innerText = "⏳ Conectando vía Proxy...";
-
+        async function sincronizar() {
+            const status = document.getElementById('status');
+            status.innerText = "⏳ Conectando...";
             try {
-                const proxyUrl = 'https://corsproxy.io/?';
-                const apiUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
-                
-                const respuesta = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
-                    headers: { 'X-Auth-Token': FOOTBALL_API_KEY }
+                const res = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches'), {
+                    headers: { 'X-Auth-Token': API_KEY }
                 });
+                const data = await res.json();
                 
-                if (!respuesta.ok) throw new Error("API Limitada.");
-                const datos = await respuesta.json();
-
-                for (const juego of datos.matches) {
-                    const terminado = juego.status === "FINISHED";
-                    
-                    // Nombres de columna exactos según tu tabla de Supabase
-                    await supabaseClient.from('partidos').insert([{ 
-                        equipo_local: juego.homeTeam.name,
-                        equipo_visitante: juego.awayTeam.name,
-                        goles_local: terminado ? juego.score.fullTime.home : null,
-                        goles_visitante: terminado ? juego.score.fullTime.away : null,
-                        jugado: terminado 
+                for (const m of data.matches) {
+                    // AQUÍ ESTÁ LA CORRECCIÓN: usamos los nombres exactos de tu tabla
+                    await supabase.from('partidos').insert([{ 
+                        equipo_local: m.homeTeam.name,
+                        equipo_visitante: m.awayTeam.name,
+                        goles_local: m.score.fullTime.home,
+                        goles_visitante: m.score.fullTime.away
                     }]);
                 }
-                msg.innerText = "✅ ¡Sincronizado con éxito!";
-                cargarPartidosLocalmente();
-            } catch (error) {
-                msg.innerText = "❌ Error: " + error.message;
+                status.innerText = "✅ ¡Sincronizado!";
+            } catch (e) {
+                status.innerText = "❌ Error: " + e.message;
             }
         }
-
-        cargarPartidosLocalmente();
     </script>
 </body>
 </html>
