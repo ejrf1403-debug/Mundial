@@ -49,8 +49,9 @@
             const dataPartidos = await resPartidos.json();
             const ahora = new Date().getTime();
             const urlParams = new URLSearchParams(window.location.search);
-            // CAMBIO: Si eres el dueño DEL LINK o eres "Administrador", puedes editar
-            const esDuenoOAdmin = (urlParams.get('usuario') === nombre || urlParams.get('usuario') === 'Administrador');
+            
+            // Administrador: Emmanuel tiene acceso total
+            const esDuenoOAdmin = (urlParams.get('usuario') === nombre || urlParams.get('usuario') === 'Emmanuel');
 
             document.getElementById('status').innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
@@ -62,9 +63,11 @@
                 if (m.status === 'FINISHED') {
                     const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
                     const pL = parseInt(p?.pronostico_local), pV = parseInt(p?.pronostico_visitante);
-                    if (pL === rL && pV === rV) color = 'bg-green-300';
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
-                    else color = 'bg-red-300';
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
                 }
 
                 return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
@@ -82,8 +85,10 @@
                     if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                     const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
                     const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                    }
                 }
             });
             document.getElementById('leaderboard').innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s]) => 
