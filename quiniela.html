@@ -42,10 +42,16 @@
                 cargarPronosticos();
             } else {
                 // Modo Admin
-                const { data } = await cliente.from('usuarios').select('nombre');
-                sel.innerHTML = '<option value="">Selecciona un participante...</option>';
-                data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>');
-                sel.onchange = cargarPronosticos;
+                try {
+                    const { data } = await cliente.from('usuarios').select('nombre');
+                    sel.innerHTML = '<option value="">Selecciona un participante...</option>';
+                    data?.forEach(u => {
+                        sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
+                    });
+                    sel.onchange = cargarPronosticos;
+                } catch (e) {
+                    sel.innerHTML = '<option value="">Error al cargar usuarios</option>';
+                }
             }
         }
 
@@ -66,6 +72,7 @@
         // 3. Guardar
         async function guardarPronostico(pId, iL, iV) {
             const nombre = document.getElementById('userSelector').value;
+            if (!nombre) return;
             await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre,
                 partido_id: String(pId),
@@ -79,25 +86,27 @@
         // 4. Calcular Tabla
         async function calcularPosiciones() {
             const lb = document.getElementById('leaderboard');
-            const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-            const dataRes = await res.json();
-            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
-            
-            let scores = {};
-            pronosticos?.forEach(p => {
-                const partidoReal = dataRes.matches.find(m => m.id == p.partido_id);
-                if (partidoReal?.status === 'FINISHED') {
-                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                    const rL = partidoReal.score.fullTime.home;
-                    const rV = partidoReal.score.fullTime.away;
-                    if (p.pronostico_local === rL && p.pronostico_visitante === rV) scores[p.nombre_usuario] += 3;
-                    else if ((p.pronostico_local > p.pronostico_visitante && rL > rV) || 
-                             (p.pronostico_local < p.pronostico_visitante && rL < rV) ||
-                             (p.pronostico_local === p.pronostico_visitante && rL === rV)) scores[p.nombre_usuario] += 1;
-                }
-            });
-            lb.innerHTML = Object.entries(scores).sort((a,b) => b[1] - a[1])
-                .map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
+            try {
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+                const dataRes = await res.json();
+                const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+                
+                let scores = {};
+                pronosticos?.forEach(p => {
+                    const partidoReal = dataRes.matches.find(m => m.id == p.partido_id);
+                    if (partidoReal?.status === 'FINISHED') {
+                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                        const rL = partidoReal.score.fullTime.home;
+                        const rV = partidoReal.score.fullTime.away;
+                        if (p.pronostico_local === rL && p.pronostico_visitante === rV) scores[p.nombre_usuario] += 3;
+                        else if ((p.pronostico_local > p.pronostico_visitante && rL > rV) || 
+                                 (p.pronostico_local < p.pronostico_visitante && rL < rV) ||
+                                 (p.pronostico_local === p.pronostico_visitante && rL === rV)) scores[p.nombre_usuario] += 1;
+                    }
+                });
+                lb.innerHTML = Object.entries(scores).sort((a,b) => b[1] - a[1])
+                    .map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
+            } catch (e) { lb.innerHTML = "Error calculando puntos."; }
         }
 
         // 5. Cargar Partidos
