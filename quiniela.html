@@ -17,7 +17,7 @@
     </div>
 
     <script>
-        // 1. CAMBIO AQUÍ: Usamos 'clienteSupabase' para evitar el conflicto
+        // 1. Renombramos la variable a 'clienteSupabase' para evitar el conflicto
         const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -41,7 +41,7 @@
                 
                 status.innerText = "✅ Datos recibidos. Guardando...";
 
-                // 2. Usamos 'clienteSupabase' aquí también
+                // 2. Usamos 'clienteSupabase' para enviar los datos
                 for (const m of data.matches.slice(0, 5)) {
                     await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
@@ -53,10 +53,10 @@
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
-                console.error("Error:", e);
             }
         }
 
+        // 3. Conexión segura al botón
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
     </script>
 </body>
