@@ -8,47 +8,38 @@
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Sincronización Corregida</h1>
+        <h1 class="text-xl font-bold mb-4">Sincronización de Datos</h1>
         <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
-            🚀 Sincronizar (Modo Proxy)
+            🚀 Sincronizar Partidos
         </button>
         <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
     </div>
 
     <script>
-        const supabase = supabase.createClient(
+        // Inicialización única
+        const supabaseClient = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Saltando restricciones CORS...";
+            status.innerText = "⏳ Sincronizando...";
 
             try {
-                // Usamos un Proxy para evitar el error "Failed to fetch"
-                const proxy = "https://corsproxy.io/?";
-                const url = "https://api.football-data.org/v4/competitions/WC/matches";
+                // Llamada a tu Edge Function
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches');
                 
-                const res = await fetch(proxy + encodeURIComponent(url), {
-                    headers: { 'X-Auth-Token': '8bd17a06ad9c42b8940faa3869f2ed55' }
-                });
-
-                if (!res.ok) throw new Error("Status API: " + res.status);
+                if (!res.ok) throw new Error("Error en servidor: " + res.status);
                 
                 const data = await res.json();
-                status.innerText = "✅ ¡Conexión lograda! Guardando en Supabase...";
-
-                // Ejemplo de inserción
-                const { error } = await supabase.from('partidos').insert([
-                    { equipo_local: 'Prueba', equipo_visitante: 'Prueba', goles_local: 0, goles_visitante: 0 }
-                ]);
-
-                if (error) throw new Error(error.message);
+                status.innerText = "✅ ¡Recibido! Procesando...";
+                console.log(data);
                 
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
+                console.error(e);
             }
         }
 
