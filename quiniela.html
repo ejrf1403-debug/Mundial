@@ -16,8 +16,9 @@
     </div>
 
     <script>
-        // Inicialización única
-        const supabaseClient = supabase.createClient(
+        // Usamos la variable global 'supabase' que ya viene en la librería
+        // sin intentar declararla de nuevo con 'const'
+        const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
@@ -27,16 +28,14 @@
             status.innerText = "⏳ Sincronizando...";
 
             try {
-                // Llamada a tu Edge Function
                 const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches');
                 
                 if (!res.ok) throw new Error("Error en servidor: " + res.status);
                 
                 const data = await res.json();
-                status.innerText = "✅ ¡Recibido! Procesando...";
+                status.innerText = "✅ ¡Datos recibidos!";
                 console.log(data);
                 
-                status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
                 console.error(e);
