@@ -49,15 +49,19 @@
             const dataPartidos = await resPartidos.json();
             const ahora = new Date().getTime();
             const urlParams = new URLSearchParams(window.location.search);
+            const userLogueado = urlParams.get('usuario');
             
-            // Administrador: Emmanuel tiene acceso total
-            const esDuenoOAdmin = (urlParams.get('usuario') === nombre || urlParams.get('usuario') === 'Emmanuel');
+            // Lógica de permisos
+            const esEmmanuel = (userLogueado === 'Emmanuel');
+            const esDueno = (userLogueado === nombre);
 
             document.getElementById('status').innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                 const fecha = new Date(m.utcDate).getTime();
-                const bloqueado = (ahora >= fecha || !esDuenoOAdmin) ? 'disabled' : '';
-                const hide = (ahora >= fecha || !esDuenoOAdmin) ? 'hidden' : '';
+                
+                // Si es Emmanuel, NUNCA se bloquea. Si no, se bloquea si el partido empezó o no es su perfil.
+                const estaBloqueado = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'disabled' : '');
+                const estaOculto = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'hidden' : '');
 
                 let color = '';
                 if (m.status === 'FINISHED') {
@@ -72,9 +76,9 @@
 
                 return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
                     <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
-                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${hide}">OK</button>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${estaBloqueado}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${estaOculto}">OK</button>
                 </div>`;
             }).join('');
 
