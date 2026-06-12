@@ -20,7 +20,6 @@
     </div>
 
     <script>
-        // Inicialización de Supabase
         const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -31,7 +30,7 @@
             status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Conectando con servidor...</p>';
 
             try {
-                // 1. Obtener Partidos y Usuarios en paralelo
+                // 1. Obtener datos
                 const [resApi, resDb] = await Promise.all([
                     fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                     cliente.from('usuarios').select('nombre') 
@@ -42,40 +41,34 @@
 
                 if (errorDb) throw new Error("Error en BD: " + errorDb.message);
 
-                // 2. Construcción del HTML
+                // 2. Renderizado
                 let html = '<div class="space-y-8">';
                 
-                // Sección Participantes
+                // Mostrar participantes
                 html += `<div>
                     <h2 class="font-bold text-lg text-slate-800 border-b pb-2">👥 Participantes (${listaUsuarios ? listaUsuarios.length : 0})</h2>
                     <div class="flex flex-wrap gap-2 mt-3">
                         ${listaUsuarios && listaUsuarios.length > 0 
                             ? listaUsuarios.map(p => `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${p.nombre}</span>`).join('') 
-                            : '<p class="text-sm text-gray-500">No se encontraron usuarios.</p>'}
+                            : '<p class="text-sm text-gray-500">No hay usuarios en la tabla.</p>'}
                     </div>
                 </div>`;
 
-                // Sección Partidos
+                // Mostrar partidos
                 html += '<div><h2 class="font-bold text-lg text-green-600 border-b pb-2 mb-4">⚽ Partidos Recientes</h2>';
                 
                 if (dataPartidos.matches) {
                     dataPartidos.matches.slice(0, 8).forEach(m => {
-                        const homeScore = m.score?.fullTime?.home ?? "-";
-                        const awayScore = m.score?.fullTime?.away ?? "-";
-                        
                         html += `
                             <div class="p-3 bg-slate-50 border border-slate-100 rounded-lg flex justify-between items-center mb-2">
                                 <div class="w-2/3">
                                     <p class="font-bold text-sm text-slate-700">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
-                                    <p class="text-[10px] text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
                                 </div>
-                                <div class="text-right">
-                                    <p class="font-black text-blue-600">${homeScore} - ${awayScore}</p>
+                                <div class="text-right font-black text-blue-600">
+                                    ${m.score?.fullTime?.home ?? "-"} - ${m.score?.fullTime?.away ?? "-"}
                                 </div>
                             </div>`;
                     });
-                } else {
-                    html += '<p class="text-sm text-gray-500">No hay partidos disponibles.</p>';
                 }
                 
                 html += '</div></div>';
@@ -83,7 +76,7 @@
                 
             } catch (e) {
                 status.innerHTML = `<p class="text-red-600 font-bold text-center">❌ ${e.message}</p>`;
-                console.error("Error:", e);
+                console.error("Error capturado:", e);
             }
         }
 
