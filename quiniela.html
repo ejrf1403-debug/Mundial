@@ -16,8 +16,7 @@
     </div>
 
     <script>
-        // Usamos la variable global 'supabase' que ya viene en la librería
-        // sin intentar declararla de nuevo con 'const'
+        // Inicialización del cliente de Supabase
         const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -25,16 +24,19 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Sincronizando...";
+            status.innerText = "⏳ Conectando con Supabase...";
 
             try {
-                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches');
+                // Llamada a la función con el nombre correcto: football-data-import
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
                 
-                if (!res.ok) throw new Error("Error en servidor: " + res.status);
+                if (!res.ok) {
+                    throw new Error("Error en servidor: " + res.status);
+                }
                 
                 const data = await res.json();
-                status.innerText = "✅ ¡Datos recibidos!";
-                console.log(data);
+                status.innerText = "✅ ¡Sincronización exitosa!";
+                console.log("Datos recibidos:", data);
                 
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
