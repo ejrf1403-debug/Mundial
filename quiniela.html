@@ -66,7 +66,9 @@
             
             const urlParams = new URLSearchParams(window.location.search);
             const usuarioLogueado = urlParams.get('usuario');
-            const esOtroUsuario = (usuarioLogueado && nombre !== usuarioLogueado);
+            
+            // Si el nombre en el selector coincide con el de la URL, es el dueño y puede editar
+            const esDuenoDelLink = (usuarioLogueado === nombre);
             
             const status = document.getElementById('status');
             const lb = document.getElementById('leaderboard');
@@ -83,11 +85,14 @@
             status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                 
-                // Lógica de Bloqueo: Si es otro usuario O si el partido ya empezó
                 const fechaPartido = new Date(m.utcDate).getTime();
                 const partidoEmpezado = ahora >= fechaPartido;
-                const disabled = (esOtroUsuario || partidoEmpezado) ? 'disabled' : '';
-                const displayBtn = (esOtroUsuario || partidoEmpezado) ? 'hidden' : '';
+                
+                // Bloqueado si el partido empezó O si no eres el dueño del link
+                const estaBloqueado = (partidoEmpezado || !esDuenoDelLink);
+                
+                const disabled = estaBloqueado ? 'disabled' : '';
+                const displayBtn = estaBloqueado ? 'hidden' : '';
                 
                 let colorClass = '';
                 if (m.status === 'FINISHED') {
@@ -96,9 +101,11 @@
                     const pL = parseInt(p?.pronostico_local);
                     const pV = parseInt(p?.pronostico_visitante);
                     
-                    if (pL === rL && pV === rV) colorClass = 'bg-green-300';
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) colorClass = 'bg-yellow-300';
-                    else if (!isNaN(pL)) colorClass = 'bg-red-300';
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) colorClass = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) colorClass = 'bg-yellow-300';
+                        else colorClass = 'bg-red-300';
+                    }
                 }
 
                 return `
@@ -121,15 +128,5 @@
                     const rV = m.score.fullTime.away;
                     const pL = parseInt(p.pronostico_local);
                     const pV = parseInt(p.pronostico_visitante);
-                    if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
-                }
-            });
-            lb.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
-        }
-
-        document.getElementById('btnLoad').addEventListener('click', cargarTodo);
-        init();
-    </script>
-</body>
-</html>
+                    if (!isNaN(pL)) {
+                        if (p
