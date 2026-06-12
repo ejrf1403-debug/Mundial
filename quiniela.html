@@ -6,72 +6,70 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 p-4 md:p-8">
+<body class="bg-slate-100 p-4">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-2xl font-bold mb-6 text-slate-800 text-center">🏆 Quiniela Mundial 2026</h1>
+        <h1 class="text-2xl font-bold text-center mb-6">🏆 Quiniela Mundial</h1>
         
-        <button id="btnSync" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold transition shadow-md">
-            🚀 Cargar Participantes y Partidos
-        </button>
+        <select id="userSelector" class="w-full p-3 border rounded-lg mb-6 font-bold text-blue-700">
+            <option value="">Selecciona tu nombre...</option>
+        </select>
         
-        <div id="status" class="mt-8">
-            <p class="text-center text-slate-500">Presiona el botón para cargar.</p>
-        </div>
+        <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
+        <div id="status" class="mt-8"></div>
     </div>
 
     <script>
-        const cliente = supabase.createClient(
-            "https://vaayxjpzwhesukyzmnez.supabase.co", 
-            "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
-        );
+        const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
-        async function sincronizarPartidos() {
-            const status = document.getElementById('status');
-            status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Conectando...</p>';
-
-            try {
-                // 1. Llamadas a la API y a Supabase
-                const resApi = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-                const resDb = await cliente.from('usuarios').select('nombre');
-                
-                const dataPartidos = await resApi.json();
-                
-                // 2. Extraer usuarios de forma segura
-                const usuarios = resDb.data || [];
-                
-                // 3. Renderizado de HTML
-                let html = '<div class="space-y-8">';
-                
-                // Sección de Usuarios
-                html += `<div>
-                    <h2 class="font-bold text-lg text-slate-800 border-b pb-2">👥 Participantes (${usuarios.length})</h2>
-                    <div class="flex flex-wrap gap-2 mt-3">
-                        ${usuarios.map(u => `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${u.nombre}</span>`).join('')}
-                    </div>
-                </div>`;
-
-                // Sección de Partidos
-                html += '<div><h2 class="font-bold text-lg text-green-600 border-b pb-2 mb-4">⚽ Partidos Recientes</h2>';
-                if (dataPartidos.matches) {
-                    dataPartidos.matches.slice(0, 5).forEach(m => {
-                        html += `
-                            <div class="p-3 bg-slate-50 border rounded-lg flex justify-between items-center mb-2">
-                                <p class="text-sm font-bold text-slate-700">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
-                                <span class="font-black text-blue-600">${m.score?.fullTime?.home ?? "-"} - ${m.score?.fullTime?.away ?? "-"}</span>
-                            </div>`;
-                    });
-                }
-                html += '</div></div>';
-                
-                status.innerHTML = html;
-                
-            } catch (e) {
-                status.innerHTML = `<p class="text-red-600 font-bold text-center">❌ Error: ${e.message}</p>`;
-                console.error("Error detallado:", e);
-            }
+        // Cargar usuarios al inicio
+        async function init() {
+            const { data } = await cliente.from('usuarios').select('nombre');
+            const sel = document.getElementById('userSelector');
+            data.forEach(u => {
+                sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
+            });
         }
 
-        document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
+        async function guardarPronostico(partidoId, horaPartido, inputL, inputV) {
+            const nombre = document.getElementById('userSelector').value;
+            if (!nombre) { alert("¡Selecciona tu nombre primero!"); return; }
+
+            const diff = (new Date(horaPartido) - new Date()) / 1000 / 60;
+            if (diff <= 30) { alert("🚫 Bloqueado: Ya pasaron los 30 min previos al juego."); return; }
+
+            const { error } = await cliente.from('pronosticos').upsert({
+                nombre_usuario: nombre,
+                partido_id: partidoId,
+                pronostico_local: parseInt(inputL.value),
+                pronostico_visitante: parseInt(inputV.value)
+            }, { onConflict: 'nombre_usuario, partido_id' });
+
+            error ? alert("Error: " + error.message) : alert("✅ Pronóstico guardado!");
+        }
+
+        document.getElementById('btnLoad').addEventListener('click', async () => {
+            const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+            const data = await res.json();
+            let html = '<div class="space-y-4">';
+            data.matches.forEach(m => {
+                html += `
+                    <div class="border p-3 rounded flex flex-col gap-2">
+                        <span class="text-xs text-gray-500">${new Date(m.utcDate).toLocaleString()}</span>
+                        <div class="flex justify-between items-center">
+                            <span>${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                            <div class="flex gap-2">
+                                <input type="number" id="l-${m.id}" class="w-12 border p-1" placeholder="0">
+                                <input type="number" id="v-${m.id}" class="w-12 border p-1" placeholder="0">
+                                <button onclick="guardarPronostico('${m.id}', '${m.utcDate}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
+                                class="bg-green-600 text-white px-2 py-1 rounded text-xs">Guardar</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('status').innerHTML = html + '</div>';
+        });
+
+        init();
     </script>
 </body>
 </html>
