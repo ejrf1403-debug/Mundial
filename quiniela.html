@@ -11,20 +11,19 @@
         <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
         
         <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
-            🔄 Sincronizar Calendario y Marcadores
+            🔄 Sincronizar Partidos
         </button>
         <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
     </div>
 
     <script>
-        // 1. Inicialización ÚNICA de Supabase
-        const supabase = supabase.createClient(
+        // 1. CAMBIO AQUÍ: Usamos 'clienteSupabase' para evitar el conflicto
+        const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
         );
         const API_KEY = "8bd17a06ad9c42b8940faa3869f2ed55";
 
-        // 2. Función lógica de sincronización
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
             status.innerText = "⏳ Conectando...";
@@ -42,9 +41,9 @@
                 
                 status.innerText = "✅ Datos recibidos. Guardando...";
 
-                // 3. Guardar en Supabase (Usando tus nombres de columna reales)
+                // 2. Usamos 'clienteSupabase' aquí también
                 for (const m of data.matches.slice(0, 5)) {
-                    await supabase.from('partidos').insert([{ 
+                    await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
                         equipo_visitante: m.awayTeam.name,
                         goles_local: m.score.fullTime.home,
@@ -58,7 +57,6 @@
             }
         }
 
-        // 4. Conectar el botón a la función
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
     </script>
 </body>
