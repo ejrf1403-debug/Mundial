@@ -11,15 +11,15 @@
         <div class="bg-white p-6 rounded-xl shadow">
             <h1 class="text-xl font-bold mb-4 text-center">🛠 Panel de Administración</h1>
             <select id="userSelector" onchange="cargarPronosticos()" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
-                <option value="">Selecciona un participante...</option>
+                <option value="">Cargando participantes...</option>
             </select>
-            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos y Calcular</button>
-            <div id="status" class="mt-4"></div>
+            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos y Tabla</button>
+            <div id="status" class="mt-4 text-sm"></div>
         </div>
 
         <div class="bg-white p-6 rounded-xl shadow">
             <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
-            <div id="leaderboard" class="space-y-2">Cargando...</div>
+            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para ver la tabla.</div>
         </div>
     </div>
 
@@ -27,9 +27,15 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function cargarUsuarios() {
-            const { data } = await cliente.from('usuarios').select('nombre');
-            const sel = document.getElementById('userSelector');
-            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            try {
+                const { data, error } = await cliente.from('usuarios').select('nombre');
+                if (error) throw error;
+                const sel = document.getElementById('userSelector');
+                sel.innerHTML = '<option value="">Selecciona un participante...</option>';
+                data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            } catch (e) {
+                document.getElementById('userSelector').innerHTML = '<option>Error al cargar usuarios</option>';
+            }
         }
 
         async function cargarPronosticos() {
@@ -60,59 +66,53 @@
 
         async function calcularPosiciones() {
             const lb = document.getElementById('leaderboard');
-            const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-            const dataRes = await res.json();
-            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
-            
-            if (!pronosticos || pronosticos.length === 0) { lb.innerHTML = "No hay pronósticos."; return; }
+            try {
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+                const dataRes = await res.json();
+                const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+                
+                let scores = {};
+                pronosticos?.forEach(p => {
+                    const partidoReal = dataRes.matches.find(m => m.id == p.partido_id);
+                    if (!partidoReal) return;
+                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                    
+                    // Si el partido terminó, sumamos puntos
+                    if (partidoReal.status === 'FINISHED') {
+                        const realL = partidoReal.score.fullTime.home;
+                        const realV = partidoReal.score.fullTime.away;
+                        if (p.pronostico_local === realL && p.pronostico_visitante === realV) scores[p.nombre_usuario] += 3;
+                        else if ((p.pronostico_local > p.pronostico_visitante && realL > realV) || 
+                                 (p.pronostico_local < p.pronostico_visitante && realL < realV) ||
+                                 (p.pronostico_local === p.pronostico_visitante && realL === realV)) scores[p.nombre_usuario] += 1;
+                    }
+                });
 
-            let scores = {};
-            pronosticos.forEach(p => {
-                const partidoReal = dataRes.matches.find(m => m.id == p.partido_id);
-                if (!partidoReal || partidoReal.status !== 'FINISHED') return;
-
-                if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-
-                const realL = partidoReal.score.fullTime.home;
-                const realV = partidoReal.score.fullTime.away;
-
-                if (p.pronostico_local === realL && p.pronostico_visitante === realV) scores[p.nombre_usuario] += 3;
-                else if ((p.pronostico_local > p.pronostico_visitante && realL > realV) || 
-                         (p.pronostico_local < p.pronostico_visitante && realL < realV) ||
-                         (p.pronostico_local === p.pronostico_visitante && realL === realV)) scores[p.nombre_usuario] += 1;
-            });
-
-            if (Object.keys(scores).length === 0) {
-                lb.innerHTML = "Aún no hay resultados de partidos finalizados.";
-            } else {
-                lb.innerHTML = Object.entries(scores)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([nombre, pts]) => `
-                        <div class="flex justify-between p-3 bg-gray-50 border rounded">
-                            <span class="font-bold">${nombre}</span>
-                            <span class="bg-blue-600 text-white px-3 rounded-full text-xs font-bold">${pts} pts</span>
-                        </div>`).join('');
-            }
+                lb.innerHTML = Object.entries(scores).length === 0 ? "Sin datos de partidos finalizados." :
+                    Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([n, p]) => `<div class="flex justify-between p-2 bg-gray-50 border rounded"><span>${n}</span><b>${p} pts</b></div>`).join('');
+            } catch (e) { lb.innerHTML = "Error al calcular tabla."; }
         }
 
         document.getElementById('btnLoad').addEventListener('click', async () => {
-            const res = await fetch('https://vaayxjpzwhesukyzmnez.svc.football-data-import');
-            const data = await res.json();
-            let html = '<div class="space-y-2">';
-            data.matches.forEach(m => {
-                html += `
-                    <div class="flex items-center justify-between p-2 border-b text-xs">
-                        <span class="w-1/2 truncate font-semibold">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = "Cargando partidos...";
+            try {
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+                const data = await res.json();
+                let html = '<div class="space-y-2">';
+                data.matches.forEach(m => {
+                    html += `<div class="flex items-center justify-between p-2 border-b text-xs">
+                        <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
                         <div class="flex gap-1">
-                            <input type="number" id="l-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="L">
-                            <input type="number" id="v-${m.id}" class="w-10 border text-center p-1 rounded" placeholder="V">
-                            <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" 
-                            class="bg-green-600 text-white px-2 py-1 rounded font-bold">OK</button>
+                            <input type="number" id="l-${m.id}" class="w-8 border text-center" placeholder="L">
+                            <input type="number" id="v-${m.id}" class="w-8 border text-center" placeholder="V">
+                            <button onclick="guardarPronostico('${m.id}', document.getElementById('l-${m.id}'), document.getElementById('v-${m.id}'))" class="bg-green-600 text-white px-2 rounded">OK</button>
                         </div>
                     </div>`;
-            });
-            document.getElementById('status').innerHTML = html + '</div>';
-            calcularPosiciones();
+                });
+                statusDiv.innerHTML = html + '</div>';
+                calcularPosiciones();
+            } catch (e) { statusDiv.innerHTML = "Error al cargar partidos."; }
         });
 
         cargarUsuarios();
