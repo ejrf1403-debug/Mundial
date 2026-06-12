@@ -23,34 +23,30 @@
         
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Intentando conexión directa...";
+            status.innerText = "⏳ Conectando vía proxy...";
 
             try {
-                // Usamos 'api.football-data.org' directamente con una cabecera más permisiva
-                const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
-                    method: 'GET',
-                    headers: { 
-                        'X-Auth-Token': '8bd17a06ad9c42b8940faa3869f2ed55',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!res.ok) throw new Error("API bloqueó la petición. Intenta después.");
-                const data = await res.json();
+                // Usamos un nuevo proxy que sí acepta dominios externos
+                const url = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches');
+                
+                const response = await fetch(url);
+                const dataRaw = await response.json();
+                const data = JSON.parse(dataRaw.contents);
                 
                 status.innerText = "✅ Datos recibidos. Guardando...";
 
-                for (const m of data.matches.slice(0, 3)) {
+                for (const m of data.matches.slice(0, 5)) {
                     await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
                         equipo_visitante: m.awayTeam.name,
-                        goles_local: m.score.fullTime.home,
-                        goles_visitante: m.score.fullTime.away
+                        goles_local: m.score.fullTime.home || 0,
+                        goles_visitante: m.score.fullTime.away || 0
                     }]);
                 }
                 status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
+                console.error("Error completo:", e);
             }
         }
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
