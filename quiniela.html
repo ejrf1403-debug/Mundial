@@ -51,7 +51,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const userLogueado = urlParams.get('usuario');
             
-            // Lógica de permisos
+            // Permisos
             const esEmmanuel = (userLogueado === 'Emmanuel');
             const esDueno = (userLogueado === nombre);
 
@@ -59,7 +59,8 @@
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                 const fecha = new Date(m.utcDate).getTime();
                 
-                // Si es Emmanuel, NUNCA se bloquea. Si no, se bloquea si el partido empezó o no es su perfil.
+                // Si es Emmanuel, NUNCA se bloquea (ni por fecha ni por dueño).
+                // Si no, se bloquea si el partido empezó o no es su perfil.
                 const estaBloqueado = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'disabled' : '');
                 const estaOculto = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'hidden' : '');
 
