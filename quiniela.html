@@ -8,14 +8,16 @@
 </head>
 <body class="bg-slate-100 p-8">
     <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow">
-        <h1 class="text-xl font-bold mb-4">Sincronización Mundial 2026</h1>
+        <h1 class="text-xl font-bold mb-4">Mi Quiniela Mundial 2026</h1>
+        
         <button id="btnSync" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold">
-            🔄 Iniciar Sincronización
+            🔄 Sincronizar desde Servidor
         </button>
         <p id="status" class="mt-4 text-center font-mono text-sm text-slate-600"></p>
     </div>
 
     <script>
+        // 1. Inicialización del cliente
         const clienteSupabase = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -23,37 +25,39 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerText = "⏳ Intentando bypass de CORS...";
+            status.innerText = "⏳ Solicitando datos al servidor...";
 
             try {
-                // Usamos 'corsproxy.io' enviando el token en la URL como parámetro,
-                // que a veces evita el error de "Preflight Request" (CORS)
-                const url = 'https://corsproxy.io/?' + encodeURIComponent('https://api.football-data.org/v4/competitions/WC/matches');
+                // 2. Llamada a tu nueva Edge Function (el puente)
+                const url = 'https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-matches';
                 
-                const res = await fetch(url, {
-                    method: 'GET',
-                    headers: { 'X-Auth-Token': '8bd17a06ad9c42b8940faa3869f2ed55' }
-                });
-
-                if (!res.ok) throw new Error("Servidor rechazó el proxy (Error " + res.status + ")");
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Error en la función: " + res.status);
+                
                 const data = await res.json();
-                
-                status.innerText = "✅ Datos obtenidos. Guardando...";
+                status.innerText = "✅ Datos recibidos. Guardando...";
 
+                // 3. Inserción en tabla 'partidos'
                 for (const m of data.matches.slice(0, 5)) {
-                    await clienteSupabase.from('partidos').insert([{ 
+                    const { error } = await clienteSupabase.from('partidos').insert([{ 
                         equipo_local: m.homeTeam.name,
                         equipo_visitante: m.awayTeam.name,
                         goles_local: m.score.fullTime.home ?? 0,
                         goles_visitante: m.score.fullTime.away ?? 0
                     }]);
+
+                    if (error) {
+                        console.error("Error al insertar fila:", error);
+                        throw new Error(error.message);
+                    }
                 }
-                status.innerText = "¡Sincronización exitosa!";
+                status.innerText = "¡Sincronización completa!";
             } catch (e) {
                 status.innerText = "❌ Error: " + e.message;
-                console.error("Error técnico:", e);
+                console.error("Detalle técnico:", e);
             }
         }
+
         document.getElementById('btnSync').addEventListener('click', sincronizarPartidos);
     </script>
 </body>
