@@ -63,7 +63,7 @@
                 for (const juego of datos.matches) {
                     const terminado = juego.status === "FINISHED";
                     
-                    // Insertando con los nombres de columna correctos de tu base de datos
+                    // Nombres de columna exactos según tu tabla de Supabase
                     await supabaseClient.from('partidos').insert([{ 
                         equipo_local: juego.homeTeam.name,
                         equipo_visitante: juego.awayTeam.name,
