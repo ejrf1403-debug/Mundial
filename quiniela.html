@@ -7,23 +7,29 @@
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 p-4">
-    <div class="max-w-2xl mx-auto space-y-6">
-        <div class="bg-white p-6 rounded-xl shadow">
-            <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-            
-            <label class="block text-sm font-bold mb-1">Tu usuario:</label>
-            <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
-                <option value="">Cargando...</option>
-            </select>
-            
-            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
-            <div id="status" class="mt-4 text-sm"></div>
+    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="md:col-span-2 space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
+                
+                <label class="block text-sm font-bold mb-1">Tu usuario:</label>
+                <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
+                    <option value="">Cargando...</option>
+                </select>
+                
+                <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
+                <div id="status" class="mt-4 text-sm max-h-[60vh] overflow-y-auto"></div>
+            </div>
         </div>
 
-        <div class="bg-white p-6 rounded-xl shadow">
-            <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
-            <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para ver la tabla.</div>
+        <div class="md:col-span-1">
+            <div class="bg-white p-6 rounded-xl shadow sticky top-6">
+                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla de Posiciones</h2>
+                <div id="leaderboard" class="space-y-2 text-sm text-gray-500">Haz clic en "Cargar Partidos" para ver la tabla.</div>
+            </div>
         </div>
+
     </div>
 
     <script>
@@ -53,9 +59,7 @@
                         sel.appendChild(opt);
                     });
                     sel.onchange = cargarPronosticos;
-                } catch (e) {
-                    sel.innerHTML = '<option value="">Error al cargar</option>';
-                }
+                } catch (e) { sel.innerHTML = '<option value="">Error al cargar</option>'; }
             }
         }
 
