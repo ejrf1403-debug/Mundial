@@ -19,7 +19,6 @@
     </div>
 
     <script>
-        // Inicialización del cliente Supabase
         const cliente = supabase.createClient(
             "https://vaayxjpzwhesukyzmnez.supabase.co", 
             "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm"
@@ -36,27 +35,33 @@
                 
                 const data = await res.json();
                 
-                // Construcción visual de la lista
                 let html = '<div class="space-y-3">';
-                html += '<h2 class="font-bold text-lg text-green-600 mb-4">✅ Partidos Recientes:</h2>';
+                html += '<h2 class="font-bold text-lg text-green-600 mb-4">✅ Partidos:</h2>';
                 
                 if (data.matches && data.matches.length > 0) {
-                    // Procesamos los primeros 10 partidos
                     data.matches.slice(0, 10).forEach(m => {
-                        const homeScore = m.score.fullTime.home !== null ? m.score.fullTime.home : "-";
-                        const awayScore = m.score.fullTime.away !== null ? m.score.fullTime.away : "-";
-                        const statusText = m.status === 'FINISHED' ? 'Terminado' : 'Programado';
-                        const statusColor = m.status === 'FINISHED' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600';
+                        // Seguridad para manejar marcadores nulos
+                        const homeScore = (m.score && m.score.fullTime && m.score.fullTime.home !== null) ? m.score.fullTime.home : "-";
+                        const awayScore = (m.score && m.score.fullTime && m.score.fullTime.away !== null) ? m.score.fullTime.away : "-";
+                        
+                        // Traducción de estados
+                        const estados = {
+                            'FINISHED': { text: 'Finalizado', color: 'bg-slate-200 text-slate-600' },
+                            'IN_PLAY': { text: 'En Juego', color: 'bg-red-500 text-white animate-pulse' },
+                            'TIMED': { text: 'Programado', color: 'bg-blue-100 text-blue-600' },
+                            'POSTPONED': { text: 'Aplazado', color: 'bg-yellow-100 text-yellow-600' }
+                        };
+                        const estado = estados[m.status] || { text: m.status, color: 'bg-gray-100' };
 
                         html += `
-                            <div class="p-4 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center">
+                            <div class="p-4 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center mb-2">
                                 <div class="w-2/3">
                                     <p class="font-bold text-slate-800">${m.homeTeam.name} vs ${m.awayTeam.name}</p>
                                     <p class="text-xs text-slate-400">${new Date(m.utcDate).toLocaleString()}</p>
                                 </div>
                                 <div class="text-right">
                                     <p class="font-black text-lg text-blue-700">${homeScore} - ${awayScore}</p>
-                                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${statusColor}">${statusText}</span>
+                                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${estado.color}">${estado.text}</span>
                                 </div>
                             </div>`;
                     });
@@ -69,7 +74,6 @@
                 
             } catch (e) {
                 status.innerHTML = '<p class="text-red-600 font-bold text-center">❌ Error: ' + e.message + '</p>';
-                console.error("Detalle del error:", e);
             }
         }
 
