@@ -15,7 +15,8 @@
         </button>
         
         <div id="status" class="mt-8">
-            </div>
+            <p class="text-center text-slate-500">Presiona el botón para cargar la información.</p>
+        </div>
     </div>
 
     <script>
@@ -27,19 +28,19 @@
 
         async function sincronizarPartidos() {
             const status = document.getElementById('status');
-            status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Obteniendo información...</p>';
+            status.innerHTML = '<p class="text-center italic text-slate-500">⏳ Conectando con servidor y BD...</p>';
 
             try {
-                // 1. Obtener Partidos y Participantes en paralelo
+                // 1. Obtener Partidos (API) y Participantes (Tabla 'usuarios') en paralelo
                 const [resApi, resDb] = await Promise.all([
                     fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
-                    cliente.from('participantes').select('nombre') // Cambia 'participantes' si tu tabla se llama distinto
+                    cliente.from('usuarios').select('nombre') 
                 ]);
 
                 const dataPartidos = await resApi.json();
                 const { data: listaParticipantes, error } = resDb;
 
-                if (error) throw new Error("Error cargando participantes: " + error.message);
+                if (error) throw new Error("Error en BD: " + error.message);
 
                 // 2. Construcción del HTML
                 let html = '<div class="space-y-8">';
@@ -77,7 +78,7 @@
                 
             } catch (e) {
                 status.innerHTML = `<p class="text-red-600 font-bold text-center">❌ ${e.message}</p>`;
-                console.error(e);
+                console.error("Error completo:", e);
             }
         }
 
