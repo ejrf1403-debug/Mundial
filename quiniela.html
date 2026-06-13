@@ -21,7 +21,7 @@
 
         <div class="md:col-span-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
-                <h2 class="text-lg font-bold mb-2">📊 Tabla</h2>
+                <h2 class="text-lg font-bold mb-2">📊 Tabla de Posiciones</h2>
                 <div id="tablaContenido" class="space-y-1"></div>
             </div>
         </div>
@@ -35,13 +35,11 @@
             const sel = document.getElementById('userSelector');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
-            // Carga automática si el usuario está en la URL
             const usuarioURL = new URLSearchParams(window.location.search).get('usuario');
             if (usuarioURL) {
                 sel.value = usuarioURL;
                 cargarTodo();
             }
-            
             sel.onchange = cargarTodo;
         }
 
@@ -73,9 +71,11 @@
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                     const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (pL === rL && pV === rV) color = 'bg-green-300';
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
-                    else color = 'bg-red-300';
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
                 }
 
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
@@ -86,7 +86,7 @@
                 </div>`;
             }).join('');
 
-            // 2. RENDER TABLA
+            // 2. RENDER TABLA (ORDENADA POR PUNTOS)
             let scores = {};
             pronosticos?.forEach(p => {
                 const m = dataPartidos.matches.find(x => x.id == p.partido_id);
@@ -99,13 +99,12 @@
                 }
             });
             
-            // Ordenar: Tu usuario primero, luego los demás por puntos
-            const arrayScores = Object.entries(scores).sort((a,b) => b[1]-a[1]);
-            const ordenados = arrayScores.sort((a,b) => (a[0] === nombreVisitante ? -1 : 1));
+            // Ordenamos el array de resultados de mayor a menor puntos
+            const ranking = Object.entries(scores).sort((a,b) => b[1]-a[1]);
 
-            tablaContenido.innerHTML = ordenados.map(([n, s], i) => 
+            tablaContenido.innerHTML = ranking.map(([n, s], i) => 
                 `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : (i<3 ? 'font-bold':'')}">
-                    <span>${n === nombreVisitante ? '⭐' : i+1 + '.'} ${n}</span><span>${s} pts</span>
+                    <span>${i+1}. ${n}</span><span>${s} pts</span>
                 </div>`).join('');
         };
 
