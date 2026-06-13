@@ -12,7 +12,7 @@
         <div class="md:col-span-2 space-y-4">
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-                <p class="text-[10px] text-gray-500 mb-2 italic">Regla: Partidos disponibles para pronosticar desde las 6:00 AM del día anterior.</p>
+                <p class="text-[10px] text-gray-500 mb-2 italic">Regla: Bloqueo 30 min antes del juego y al finalizar.</p>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
                     <option value="">Selecciona un participante...</option>
                 </select>
@@ -49,12 +49,7 @@
             
             if (!usuarioSeleccionado) return;
             
-            // Lógica de hora (6 AM Venezuela)
-            const ahora = new Date();
-            const limite = new Date();
-            if (ahora.getHours() >= 6) { limite.setDate(limite.getDate() + 1); }
-            limite.setHours(23, 59, 59, 999);
-
+            const ahora = Date.now();
             status.innerHTML = "Cargando...";
             const [res, pronosticosData] = await Promise.all([
                 fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
@@ -66,14 +61,18 @@
 
             status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
-                const fechaPartido = new Date(m.utcDate);
+                const fechaPartido = new Date(m.utcDate).getTime();
                 
+                // REGLAS:
                 const esAdmin = (nombreVisitante === 'Emmanuel');
                 const esPropio = (usuarioSeleccionado === nombreVisitante);
-                const estaEnRango = fechaPartido <= limite && fechaPartido >= new Date().setHours(0,0,0,0);
                 
-                const puedeEditar = esAdmin || (esPropio && estaEnRango);
-                const mensajeBloqueo = !estaEnRango && !esAdmin ? '<div class="text-[9px] text-red-500">Bloqueado hasta mañana 6 AM</div>' : '';
+                // El bloqueo de 30 minutos: 30 * 60 * 1000 = 1,800,000 ms
+                const esTiempoValido = (fechaPartido - 1800000) > ahora;
+                const estaProgramado = (m.status === 'SCHEDULED');
+                
+                const puedeEditar = esAdmin || (esPropio && esTiempoValido && estaProgramado);
+                const mensajeBloqueo = !puedeEditar && esPropio ? '<div class="text-[9px] text-red-500">Bloqueado (fuera de tiempo)</div>' : '';
 
                 let color = '';
                 if (m.status === 'FINISHED' && p) {
@@ -114,7 +113,7 @@
             tablaContenido.innerHTML = ranking.map(([n, s], i) => 
                 `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : (i<3 ? 'font-bold':'')}">
                     <span>${i+1}. ${n}</span><span>${s} pts</span>
-                </div>`).join('');
+                </div>`).join('').replace('undefined', '');
         };
 
         async function guardar(id) {
