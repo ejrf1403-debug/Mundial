@@ -12,9 +12,8 @@
         <div class="md:col-span-2 space-y-4">
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-                <p class="text-[10px] text-gray-500 italic text-center">🔒 Bloqueo: 30 min antes de iniciar y tras finalizar.</p>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                    <option value="">Selecciona tu nombre...</option>
+                    <option value="">Cargando participantes...</option>
                 </select>
             </div>
             <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando partidos...</div>
@@ -31,9 +30,17 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
+            const { data, error } = await cliente.from('usuarios').select('nombre');
+            
+            if (error) {
+                sel.innerHTML = '<option value="">Error de conexión</option>';
+                return;
+            }
+
+            sel.innerHTML = '<option value="">Selecciona tu nombre...</option>';
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            
             const u = new URLSearchParams(window.location.search).get('usuario');
             if (u) { sel.value = u; cargarTodo(); }
             sel.onchange = cargarTodo;
@@ -82,7 +89,6 @@
                 </div>`;
             }).join('');
 
-            // Tabla con medallas
             let scores = {};
             matches.forEach(m => {
                 if (m.status === 'FINISHED') {
@@ -109,4 +115,10 @@
 
         async function guardar(id) {
             const u = document.getElementById('userSelector').value;
-            await cliente.from('pronosticos').upsert({ nombre_usuario: u, partido_id: String
+            await cliente.from('pronosticos').upsert({ nombre_usuario: u, partido_id: String(id), pronostico_local: parseInt(document.getElementById('l-'+id).value), pronostico_visitante: parseInt(document.getElementById('v-'+id).value) }, { onConflict: 'nombre_usuario, partido_id' });
+            alert("Guardado"); cargarTodo();
+        }
+        init();
+    </script>
+</body>
+</html>
