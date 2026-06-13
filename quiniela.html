@@ -13,10 +13,10 @@
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                    <option value="">Cargando participantes...</option>
+                    <option value="">Selecciona tu nombre...</option>
                 </select>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando partidos...</div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando datos...</div>
         </div>
         <div class="md:col-span-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
@@ -30,9 +30,8 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            const sel = document.getElementById('userSelector');
             const { data } = await cliente.from('usuarios').select('nombre');
-            sel.innerHTML = '<option value="">Selecciona un participante...</option>';
+            const sel = document.getElementById('userSelector');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             const u = new URLSearchParams(window.location.search).get('usuario');
             if (u) { sel.value = u; cargarTodo(); }
@@ -43,7 +42,8 @@
             const status = document.getElementById('status');
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
-            
+            if (!usuarioSeleccionado) return;
+
             const [res, pData] = await Promise.all([
                 fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                 cliente.from('pronosticos').select('*')
@@ -51,44 +51,58 @@
             
             const { matches } = await res.json();
             const pronosticos = pData.data;
-            const ahoraMS = Date.now();
+            const ahora = Date.now();
 
+            // 1. Render Partidos con Colores y Bloqueo 30min
             status.innerHTML = matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
                 const fechaMS = new Date(m.utcDate).getTime();
-                
-                // Debug log para ver qué está pasando
-                // console.log(`Partido: ${m.homeTeam.name}, Fecha: ${m.utcDate}, Bloqueado: ${(fechaMS - 1800000) <= ahoraMS}`);
-
                 const esAdmin = (nombreVisitante === 'Emmanuel');
                 const esPropio = (usuarioSeleccionado === nombreVisitante);
                 
-                // Reglas simplificadas para evitar bloqueos innecesarios
-                const esFuturo = fechaMS > ahoraMS;
-                const estaProgramado = (m.status === 'SCHEDULED');
-                const faltaMucho = (fechaMS - 1800000) > ahoraMS;
+                // Regla: Editar solo si faltan +30 min (1,800,000ms) y está programado
+                const faltaMucho = (fechaMS - 1800000) > ahora;
+                const puedeEditar = esAdmin || (esPropio && m.status === 'SCHEDULED' && faltaMucho);
 
-                // Acceso: Admin siempre, Usuario si es su perfil, es futuro y no está a menos de 30 min
-                const puedeEditar = esAdmin || (esPropio && estaProgramado && faltaMucho);
+                let color = '';
+                if (m.status === 'FINISHED' && p) {
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (pL === rL && pV === rV) color = 'bg-green-300';
+                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                    else color = 'bg-red-300';
+                }
 
-                return `<div class="border-b py-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="w-1/2 text-xs font-medium">${m.homeTeam?.name || 'Local'} vs ${m.awayTeam?.name || 'Visita'}</span>
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded" ${puedeEditar ? '' : 'disabled'}>
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded" ${puedeEditar ? '' : 'disabled'}>
-                        <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
-                    </div>
+                return `<div class="flex items-center justify-between border-b py-2 gap-2">
+                    <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
                 </div>`;
             }).join('');
+
+            // 2. Render Tabla
+            let scores = {};
+            matches.forEach(m => {
+                if (m.status === 'FINISHED') {
+                    pronosticos?.filter(x => x.partido_id == m.id).forEach(p => {
+                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                        const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                        const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                    });
+                }
+            });
+            document.getElementById('tablaContenido').innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => 
+                `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : ''}">
+                    <span>${i+1}. ${n}</span><span>${s} pts</span>
+                </div>`).join('');
         }
 
         async function guardar(id) {
-            const usuario = document.getElementById('userSelector').value;
-            await cliente.from('pronosticos').upsert({
-                nombre_usuario: usuario, partido_id: String(id),
-                pronostico_local: parseInt(document.getElementById('l-'+id).value),
-                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
-            }, { onConflict: 'nombre_usuario, partido_id' });
+            const u = document.getElementById('userSelector').value;
+            await cliente.from('pronosticos').upsert({ nombre_usuario: u, partido_id: String(id), pronostico_local: parseInt(document.getElementById('l-'+id).value), pronostico_visitante: parseInt(document.getElementById('v-'+id).value) }, { onConflict: 'nombre_usuario, partido_id' });
             alert("Guardado"); cargarTodo();
         }
         init();
