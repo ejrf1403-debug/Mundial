@@ -12,6 +12,7 @@
         <div class="md:col-span-2 space-y-4">
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
+                <p class="text-[10px] text-gray-500 italic text-center">🔒 Bloqueo: 30 min antes de iniciar y tras finalizar el juego.</p>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
                     <option value="">Selecciona tu nombre...</option>
                 </select>
@@ -51,12 +52,20 @@
             
             const { matches } = await res.json();
             const pronosticos = pData.data;
+            const ahora = new Date().getTime();
 
             status.innerHTML = matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+                const fechaPartido = new Date(m.utcDate).getTime();
                 
-                // Acceso: Admin siempre edita, Usuario siempre edita su perfil
-                const puedeEditar = (nombreVisitante === 'Emmanuel' || usuarioSeleccionado === nombreVisitante);
+                // REGLAS:
+                // 1. Falta más de 30 minutos (1,800,000 ms) para que empiece.
+                // 2. El partido no ha terminado (status es SCHEDULED o TIMED).
+                const estaEnTiempo = (fechaPartido - 1800000) > ahora;
+                const noHaTerminado = (m.status === 'SCHEDULED' || m.status === 'TIMED');
+                
+                // Emmanuel siempre puede editar. Los demás, solo si cumplen las dos reglas.
+                const puedeEditar = (nombreVisitante === 'Emmanuel') || (usuarioSeleccionado === nombreVisitante && estaEnTiempo && noHaTerminado);
 
                 let color = '';
                 if (m.status === 'FINISHED' && p) {
