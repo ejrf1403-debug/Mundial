@@ -17,12 +17,12 @@
             <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Ver Partidos</button>
         </div>
 
-        <div id="leaderboard" class="bg-white p-4 rounded-xl shadow">
+        <div class="bg-white p-4 rounded-xl shadow">
             <h2 class="text-lg font-bold mb-2">📊 Tabla</h2>
-            <div id="tablaContenido" class="space-y-1">Esperando datos...</div>
+            <div id="tablaContenido" class="space-y-1"></div>
         </div>
 
-        <div id="status" class="bg-white p-4 rounded-xl shadow space-y-2">Partidos pendientes de carga...</div>
+        <div id="status" class="bg-white p-4 rounded-xl shadow space-y-2">Esperando selección...</div>
     </div>
 
     <script>
@@ -34,15 +34,13 @@
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
         }
 
-        async function cargarTodo() {
+        document.getElementById('btnLoad').onclick = async () => {
             const status = document.getElementById('status');
             const tablaContenido = document.getElementById('tablaContenido');
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) { alert("Selecciona un nombre"); return; }
             
-            status.innerHTML = "Cargando...";
-            tablaContenido.innerHTML = "Cargando...";
-            
+            status.innerHTML = "Cargando partidos...";
             try {
                 const [res, pronosticosData] = await Promise.all([
                     fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
@@ -51,18 +49,17 @@
                 
                 const dataPartidos = await res.json();
                 const pronosticos = pronosticosData.data;
-                const ahora = Date.now();
                 const esEmmanuel = (nombre === 'Emmanuel');
 
-                // Render Partidos
+                // Render Partidos corregido
                 status.innerHTML = dataPartidos.matches.map(m => {
                     const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
-                    const fecha = new Date(m.utcDate).getTime();
-                    const bloqueado = esEmmanuel ? '' : (ahora >= fecha ? 'disabled' : '');
-                    const hide = esEmmanuel ? '' : (ahora >= fecha ? 'hidden' : '');
+                    const home = m.homeTeam?.name || "Local";
+                    const away = m.awayTeam?.name || "Visita";
+                    const hide = esEmmanuel ? '' : (m.status !== 'SCHEDULED' ? 'hidden' : '');
 
                     return `<div class="flex items-center justify-between border-b py-1 gap-1">
-                        <span class="w-1/2 truncate text-xs">${m.homeTeam.name.substring(0,8)} vs ${m.awayTeam.name.substring(0,8)}</span>
+                        <span class="w-1/2 truncate text-xs">${home.substring(0,8)} vs ${away.substring(0,8)}</span>
                         <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-8 border text-center rounded">
                         <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-8 border text-center rounded">
                         <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${hide}">OK</button>
@@ -76,7 +73,8 @@
                         pronosticos?.forEach(p => {
                             if (p.partido_id == m.id) {
                                 if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                                const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
+                                const rL = m.score?.fullTime?.home ?? 0;
+                                const rV = m.score?.fullTime?.away ?? 0;
                                 const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
                                 if (!isNaN(pL) && pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
                                 else if (!isNaN(pL) && ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV))) scores[p.nombre_usuario] += 1;
@@ -89,24 +87,27 @@
                     `<div class="flex justify-between p-1 border-b text-xs ${i<3 ? 'font-bold':''}">
                         <span>${i+1}. ${n}</span><span>${s} pts</span>
                     </div>`).join('');
-                    
             } catch (e) {
-                status.innerHTML = "Error al cargar: " + e.message;
+                status.innerHTML = "Error detallado: " + e.message;
             }
-        }
+        };
 
         async function guardar(id) {
             const nombre = document.getElementById('userSelector').value;
+            const l = document.getElementById('l-'+id).value;
+            const v = document.getElementById('v-'+id).value;
+            if(l === "" || v === "") return alert("Completa ambos marcadores");
+            
             const res = await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre, partido_id: String(id),
-                pronostico_local: parseInt(document.getElementById('l-'+id).value),
-                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
+                pronostico_local: parseInt(l),
+                pronostico_visitante: parseInt(v)
             }, { onConflict: 'nombre_usuario, partido_id' });
+            
             if (res.error) alert("Error: " + res.error.message);
-            else { alert("Guardado"); cargarTodo(); }
+            else alert("Guardado");
         }
 
-        document.getElementById('btnLoad').onclick = cargarTodo;
         init();
     </script>
 </body>
