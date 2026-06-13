@@ -41,9 +41,7 @@
             const status = document.getElementById('status');
             const tablaContenido = document.getElementById('tablaContenido');
             const usuarioSeleccionado = document.getElementById('userSelector').value;
-            
-            // Usamos un parámetro en la URL o una variable global para identificar quién está viendo la página
-            const nombreVisitante = new URLSearchParams(window.location.search).get('usuario'); 
+            const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
             
             if (!usuarioSeleccionado) { alert("Selecciona un nombre"); return; }
             
@@ -57,23 +55,12 @@
             const pronosticos = pronosticosData.data;
             const ahora = Date.now();
 
-            // REGLAS DE SEGURIDAD:
-            // 1. Eres Emmanuel? Tienes acceso total.
-            // 2. ¿Es tu propio perfil? Acceso solo si el partido NO ha empezado.
-            // 3. ¿Estás viendo a otro? Acceso bloqueado.
+            // 1. RENDER PARTIDOS
             status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
                 const fecha = new Date(m.utcDate).getTime();
+                const puedeEditar = (nombreVisitante === 'Emmanuel' || (usuarioSeleccionado === nombreVisitante && ahora < fecha));
                 
-                const esAdmin = (nombreVisitante === 'Emmanuel');
-                const esPropioPerfil = (usuarioSeleccionado === nombreVisitante);
-                
-                const puedeEditar = esAdmin || (esPropioPerfil && ahora < fecha);
-                
-                const bloqueado = puedeEditar ? '' : 'disabled';
-                const hide = puedeEditar ? '' : 'hidden';
-
-                // Colores (se calculan siempre)
                 let color = '';
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
@@ -85,28 +72,40 @@
 
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
                     <span class="w-1/2 text-xs font-medium truncate">${m.homeTeam?.name || 'Local'} vs ${m.awayTeam?.name || 'Visita'}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
-                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${hide}">OK</button>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
                 </div>`;
             }).join('');
 
-            // ... (código de tabla igual que antes)
+            // 2. RENDER TABLA DE POSICIONES
+            let scores = {};
+            pronosticos?.forEach(p => {
+                const m = dataPartidos.matches.find(x => x.id == p.partido_id);
+                if (m?.status === 'FINISHED') {
+                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (!isNaN(pL) && pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                    else if (!isNaN(pL) && ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV))) scores[p.nombre_usuario] += 1;
+                }
+            });
+            tablaContenido.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => 
+                `<div class="flex justify-between p-1 border-b text-xs ${i<3 ? 'font-bold':''}">
+                    <span>${i+1}. ${n}</span><span>${s} pts</span>
+                </div>`).join('');
         };
 
         async function guardar(id) {
             const usuarioSeleccionado = document.getElementById('userSelector').value;
-            const l = document.getElementById('l-'+id).value;
-            const v = document.getElementById('v-'+id).value;
-            
             const res = await cliente.from('pronosticos').upsert({
                 nombre_usuario: usuarioSeleccionado, partido_id: String(id),
-                pronostico_local: parseInt(l),
-                pronostico_visitante: parseInt(v)
+                pronostico_local: parseInt(document.getElementById('l-'+id).value),
+                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
             }, { onConflict: 'nombre_usuario, partido_id' });
             
             if (res.error) alert("Error: " + res.error.message);
-            else alert("Guardado");
+            else { alert("Guardado"); document.getElementById('btnLoad').click(); }
         }
         init();
     </script>
