@@ -12,9 +12,9 @@
         <div class="md:col-span-2 space-y-4">
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-                <p class="text-[10px] text-gray-500 mb-2 italic">Regla: Puedes pronosticar hoy y todo el día de mañana. Bloqueo automático 30 min antes de cada juego.</p>
+                <p class="text-[10px] text-gray-500 mb-2 italic">Regla: Puedes pronosticar hoy y todo el día de mañana. Bloqueo 30 min antes de cada juego.</p>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                    <option value="">Selecciona un participante...</option>
+                    <option value="">Cargando participantes...</option>
                 </select>
             </div>
             <div id="status" class="bg-white p-4 rounded-xl shadow">Selecciona un usuario para empezar.</div>
@@ -32,13 +32,27 @@
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
 
         async function init() {
-            const { data } = await cliente.from('usuarios').select('nombre');
-            const sel = document.getElementById('userSelector');
-            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-            
-            const usuarioURL = new URLSearchParams(window.location.search).get('usuario');
-            if (usuarioURL) { sel.value = usuarioURL; cargarTodo(); }
-            sel.onchange = cargarTodo;
+            try {
+                const sel = document.getElementById('userSelector');
+                const { data, error } = await cliente.from('usuarios').select('nombre');
+                
+                if (error) throw error;
+
+                sel.innerHTML = '<option value="">Selecciona un participante...</option>';
+                data?.forEach(u => {
+                    sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
+                });
+                
+                const usuarioURL = new URLSearchParams(window.location.search).get('usuario');
+                if (usuarioURL) {
+                    sel.value = usuarioURL;
+                    cargarTodo();
+                }
+                sel.onchange = cargarTodo;
+            } catch (e) {
+                console.error("Error cargando usuarios:", e);
+                document.getElementById('userSelector').innerHTML = '<option value="">Error al cargar usuarios</option>';
+            }
         }
 
         async function cargarTodo() {
@@ -50,14 +64,13 @@
             if (!usuarioSeleccionado) return;
             
             const ahoraMS = Date.now();
-            
-            // Calculamos el final del día de mañana
             const manana = new Date();
             manana.setDate(manana.getDate() + 1);
             manana.setHours(23, 59, 59, 999);
             const limiteMananaMS = manana.getTime();
 
-            status.innerHTML = "Cargando...";
+            status.innerHTML = "Cargando partidos...";
+            
             const [res, pronosticosData] = await Promise.all([
                 fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                 cliente.from('pronosticos').select('*')
@@ -67,4 +80,72 @@
             const pronosticos = pronosticosData.data;
 
             status.innerHTML = dataPartidos.matches.map(m => {
-                const p = pronosticos?.find(x => x.
+                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+                const fechaPartidoMS = new Date(m.utcDate).getTime();
+                
+                const esAdmin = (nombreVisitante === 'Emmanuel');
+                const esPropio = (usuarioSeleccionado === nombreVisitante);
+                
+                const hayTiempo = (fechaPartidoMS - 1800000) > ahoraMS;
+                const esRangoValido = fechaPartidoMS <= limiteMananaMS;
+                const estaProgramado = (m.status === 'SCHEDULED');
+                
+                const puedeEditar = esAdmin || (esPropio && hayTiempo && esRangoValido && estaProgramado);
+                const mensajeBloqueo = !puedeEditar && esPropio ? '<div class="text-[9px] text-red-500">Bloqueado: Fuera de rango o juego cercano</div>' : '';
+
+                let color = '';
+                if (m.status === 'FINISHED' && p) {
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
+                }
+
+                return `<div class="border-b py-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="w-1/2 text-xs font-medium truncate">${m.homeTeam?.name || 'Local'} vs ${m.awayTeam?.name || 'Visita'}</span>
+                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                        <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
+                    </div>
+                    ${mensajeBloqueo}
+                </div>`;
+            }).join('');
+
+            let scores = {};
+            pronosticos?.forEach(p => {
+                const m = dataPartidos.matches.find(x => x.id == p.partido_id);
+                if (m?.status === 'FINISHED') {
+                    if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (!isNaN(pL) && pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                    else if (!isNaN(pL) && ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV))) scores[p.nombre_usuario] += 1;
+                }
+            });
+            
+            const ranking = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+            tablaContenido.innerHTML = ranking.map(([n, s], i) => 
+                `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : (i<3 ? 'font-bold':'')}">
+                    <span>${i+1}. ${n}</span><span>${s} pts</span>
+                </div>`).join('').replace('undefined', '');
+        };
+
+        async function guardar(id) {
+            const usuarioSeleccionado = document.getElementById('userSelector').value;
+            const res = await cliente.from('pronosticos').upsert({
+                nombre_usuario: usuarioSeleccionado, partido_id: String(id),
+                pronostico_local: parseInt(document.getElementById('l-'+id).value),
+                pronostico_visitante: parseInt(document.getElementById('v-'+id).value)
+            }, { onConflict: 'nombre_usuario, partido_id' });
+            
+            if (res.error) alert("Error: " + res.error.message);
+            else { alert("Guardado"); cargarTodo(); }
+        }
+        init();
+    </script>
+</body>
+</html>
