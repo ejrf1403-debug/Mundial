@@ -16,7 +16,7 @@
                     <option value="">Selecciona tu nombre...</option>
                 </select>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow"></div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando partidos...</div>
         </div>
         <div class="md:col-span-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
@@ -39,6 +39,7 @@
         }
 
         async function cargarTodo() {
+            const status = document.getElementById('status');
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
             if (!usuarioSeleccionado) return;
@@ -50,35 +51,29 @@
             
             const { matches } = await res.json();
             const pronosticos = pData.data;
-            const ahora = Date.now();
 
-            document.getElementById('status').innerHTML = matches.map(m => {
+            status.innerHTML = matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
-                const fechaMS = new Date(m.utcDate).getTime();
                 
-                // --- LÓGICA DE BLOQUEO ---
-                const esAdmin = (nombreVisitante === 'Emmanuel');
-                // Si falta menos de media hora (1,800,000ms) o ya pasó
-                const bloqueoTiempo = (fechaMS - 1,800,000) < ahora; 
-                const puedeEditar = esAdmin || (usuarioSeleccionado === nombreVisitante && !bloqueoTiempo && m.status === 'SCHEDULED');
+                // Acceso: Admin siempre edita, Usuario siempre edita su perfil
+                const puedeEditar = (nombreVisitante === 'Emmanuel' || usuarioSeleccionado === nombreVisitante);
 
                 let color = '';
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                     const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (pL === rL && pV === rV) color = 'bg-green-300';
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
-                    else color = 'bg-red-300';
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
                 }
 
-                return `<div class="border-b py-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
-                        <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
-                    </div>
-                    ${!puedeEditar && usuarioSeleccionado === nombreVisitante ? '<small class="text-red-500">Bloqueado: fuera de horario</small>' : ''}
+                return `<div class="flex items-center justify-between border-b py-2 gap-2">
+                    <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
                 </div>`;
             }).join('');
 
@@ -90,8 +85,10 @@
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        if (!isNaN(pL)) {
+                           if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        }
                     });
                 }
             });
