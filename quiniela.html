@@ -2,16 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quiniela 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 p-4">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="md:col-span-2 space-y-6">
-            <div class="bg-white p-6 rounded-xl shadow">
-                <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-                <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
+<body class="bg-slate-100 p-2 md:p-4">
+    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2 space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow">
+                <h1 class="text-lg font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
+                <select id="userSelector" class="w-full p-2 border rounded-lg mb-4 font-bold text-red-600 bg-red-50">
                     <option value="">Selecciona un participante...</option>
                 </select>
                 <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Cargar Partidos</button>
@@ -19,9 +20,9 @@
             </div>
         </div>
         <div class="md:col-span-1">
-            <div class="bg-white p-6 rounded-xl shadow sticky top-6 max-h-[80vh] flex flex-col">
-                <h2 class="text-xl font-bold mb-4 text-center">📊 Tabla</h2>
-                <div id="leaderboard" class="space-y-2 text-sm overflow-y-auto pr-2"></div>
+            <div class="bg-white p-4 rounded-xl shadow md:sticky md:top-6 max-h-[50vh] md:max-h-[80vh] flex flex-col">
+                <h2 class="text-lg font-bold mb-2 text-center">📊 Tabla</h2>
+                <div id="leaderboard" class="space-y-1 text-sm overflow-y-auto pr-1"></div>
             </div>
         </div>
     </div>
@@ -50,15 +51,13 @@
             const dataPartidos = await res.json();
             
             const ahora = Date.now();
-            const urlParams = new URLSearchParams(window.location.search);
-            const esEmmanuel = (urlParams.get('usuario') === 'Emmanuel');
-            const esDueno = (urlParams.get('usuario') === nombre);
+            const esEmmanuel = (new URLSearchParams(window.location.search).get('usuario') === 'Emmanuel');
+            const esDueno = (new URLSearchParams(window.location.search).get('usuario') === nombre);
 
             status.innerHTML = dataPartidos.matches.map(m => {
                 const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                 const fecha = new Date(m.utcDate).getTime();
                 
-                // Color calculado SIEMPRE si el partido terminó
                 let color = '';
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
@@ -71,15 +70,14 @@
                 const bloqueado = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'disabled' : '');
                 const hide = esEmmanuel ? '' : (ahora >= fecha || !esDueno ? 'hidden' : '');
 
-                return `<div class="flex items-center justify-between p-2 border-b text-xs gap-2">
-                    <span class="w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                    <input type="number" value="${p?.pronostico_local ?? ''}" id="l-${m.id}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
-                    <input type="number" value="${p?.pronostico_visitante ?? ''}" id="v-${m.id}" class="w-10 border text-center rounded ${color}" ${bloqueado}>
+                return `<div class="flex items-center justify-between p-2 border-b text-xs gap-1">
+                    <span class="w-1/2 truncate">${m.homeTeam.name.substring(0, 10)}...</span>
+                    <input type="number" value="${p?.pronostico_local ?? ''}" id="l-${m.id}" class="w-8 border text-center rounded ${color}" ${bloqueado}>
+                    <input type="number" value="${p?.pronostico_visitante ?? ''}" id="v-${m.id}" class="w-8 border text-center rounded ${color}" ${bloqueado}>
                     <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded ${hide}">OK</button>
                 </div>`;
             }).join('');
 
-            // Tabla (recalculo los puntos para todos)
             let scores = {};
             dataPartidos.matches.forEach(m => {
                 if (m.status === 'FINISHED') {
