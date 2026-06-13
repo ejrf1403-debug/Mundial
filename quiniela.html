@@ -8,21 +8,26 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 p-2 text-sm">
-    <div class="max-w-xl mx-auto space-y-4">
-        <div class="bg-white p-4 rounded-xl shadow">
-            <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
-            <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                <option value="">Selecciona tu nombre...</option>
-            </select>
-            <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Ver Partidos</button>
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <div class="md:col-span-2 space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow">
+                <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
+                <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
+                    <option value="">Selecciona tu nombre...</option>
+                </select>
+                <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Ver Partidos</button>
+            </div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Esperando selección...</div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl shadow">
-            <h2 class="text-lg font-bold mb-2">📊 Tabla</h2>
-            <div id="tablaContenido" class="space-y-1"></div>
+        <div class="md:col-span-1">
+            <div class="bg-white p-4 rounded-xl shadow sticky top-4">
+                <h2 class="text-lg font-bold mb-2">📊 Tabla</h2>
+                <div id="tablaContenido" class="space-y-1"></div>
+            </div>
         </div>
 
-        <div id="status" class="bg-white p-4 rounded-xl shadow space-y-2">Esperando selección...</div>
     </div>
 
     <script>
@@ -40,7 +45,7 @@
             const nombre = document.getElementById('userSelector').value;
             if (!nombre) { alert("Selecciona un nombre"); return; }
             
-            status.innerHTML = "Cargando partidos...";
+            status.innerHTML = "Cargando...";
             try {
                 const [res, pronosticosData] = await Promise.all([
                     fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
@@ -51,22 +56,20 @@
                 const pronosticos = pronosticosData.data;
                 const esEmmanuel = (nombre === 'Emmanuel');
 
-                // Render Partidos corregido
                 status.innerHTML = dataPartidos.matches.map(m => {
                     const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == nombre);
                     const home = m.homeTeam?.name || "Local";
                     const away = m.awayTeam?.name || "Visita";
                     const hide = esEmmanuel ? '' : (m.status !== 'SCHEDULED' ? 'hidden' : '');
 
-                    return `<div class="flex items-center justify-between border-b py-1 gap-1">
-                        <span class="w-1/2 truncate text-xs">${home.substring(0,8)} vs ${away.substring(0,8)}</span>
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-8 border text-center rounded">
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-8 border text-center rounded">
+                    return `<div class="flex items-center justify-between border-b py-2 gap-2">
+                        <span class="w-1/2 text-xs font-medium">${home.substring(0,10)} vs ${away.substring(0,10)}</span>
+                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded">
+                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded">
                         <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${hide}">OK</button>
                     </div>`;
                 }).join('');
 
-                // Render Tabla
                 let scores = {};
                 dataPartidos.matches.forEach(m => {
                     if (m.status === 'FINISHED') {
@@ -88,7 +91,7 @@
                         <span>${i+1}. ${n}</span><span>${s} pts</span>
                     </div>`).join('');
             } catch (e) {
-                status.innerHTML = "Error detallado: " + e.message;
+                status.innerHTML = "Error: " + e.message;
             }
         };
 
@@ -96,14 +99,12 @@
             const nombre = document.getElementById('userSelector').value;
             const l = document.getElementById('l-'+id).value;
             const v = document.getElementById('v-'+id).value;
-            if(l === "" || v === "") return alert("Completa ambos marcadores");
-            
+            if(l === "" || v === "") return alert("Completa ambos");
             const res = await cliente.from('pronosticos').upsert({
                 nombre_usuario: nombre, partido_id: String(id),
                 pronostico_local: parseInt(l),
                 pronostico_visitante: parseInt(v)
             }, { onConflict: 'nombre_usuario, partido_id' });
-            
             if (res.error) alert("Error: " + res.error.message);
             else alert("Guardado");
         }
