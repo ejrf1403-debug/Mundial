@@ -15,9 +15,8 @@
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
                     <option value="">Selecciona un participante...</option>
                 </select>
-                <button id="btnLoad" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Ver Partidos</button>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow">Selecciona un usuario para empezar.</div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Seleccionando usuario...</div>
         </div>
 
         <div class="md:col-span-1">
@@ -35,15 +34,24 @@
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            
+            // Carga automática si el usuario está en la URL
+            const usuarioURL = new URLSearchParams(window.location.search).get('usuario');
+            if (usuarioURL) {
+                sel.value = usuarioURL;
+                cargarTodo();
+            }
+            
+            sel.onchange = cargarTodo;
         }
 
-        document.getElementById('btnLoad').onclick = async () => {
+        async function cargarTodo() {
             const status = document.getElementById('status');
             const tablaContenido = document.getElementById('tablaContenido');
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
             
-            if (!usuarioSeleccionado) { alert("Selecciona un nombre"); return; }
+            if (!usuarioSeleccionado) return;
             
             status.innerHTML = "Cargando...";
             const [res, pronosticosData] = await Promise.all([
@@ -78,7 +86,7 @@
                 </div>`;
             }).join('');
 
-            // 2. RENDER TABLA DE POSICIONES
+            // 2. RENDER TABLA
             let scores = {};
             pronosticos?.forEach(p => {
                 const m = dataPartidos.matches.find(x => x.id == p.partido_id);
@@ -90,9 +98,14 @@
                     else if (!isNaN(pL) && ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV))) scores[p.nombre_usuario] += 1;
                 }
             });
-            tablaContenido.innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => 
-                `<div class="flex justify-between p-1 border-b text-xs ${i<3 ? 'font-bold':''}">
-                    <span>${i+1}. ${n}</span><span>${s} pts</span>
+            
+            // Ordenar: Tu usuario primero, luego los demás por puntos
+            const arrayScores = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+            const ordenados = arrayScores.sort((a,b) => (a[0] === nombreVisitante ? -1 : 1));
+
+            tablaContenido.innerHTML = ordenados.map(([n, s], i) => 
+                `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : (i<3 ? 'font-bold':'')}">
+                    <span>${n === nombreVisitante ? '⭐' : i+1 + '.'} ${n}</span><span>${s} pts</span>
                 </div>`).join('');
         };
 
@@ -105,7 +118,7 @@
             }, { onConflict: 'nombre_usuario, partido_id' });
             
             if (res.error) alert("Error: " + res.error.message);
-            else { alert("Guardado"); document.getElementById('btnLoad').click(); }
+            else { alert("Guardado"); cargarTodo(); }
         }
         init();
     </script>
