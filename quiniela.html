@@ -16,9 +16,9 @@
                     <option value="">Selecciona tu nombre...</option>
                 </select>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando partidos...</div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando datos...</div>
         </div>
-        <div class="md:col-span-1">
+        <div class="md:grid-cols-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
                 <h2 class="text-lg font-bold mb-2">📊 Tabla de Posiciones</h2>
                 <div id="tablaContenido" class="space-y-1"></div>
@@ -28,17 +28,17 @@
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
-        let cachedMatches = null; // Cache para no esperar 10s al cambiar de usuario
+        let cachedMatches = null;
 
         async function init() {
             const sel = document.getElementById('userSelector');
+            // Carga rápida de usuarios
             const { data } = await cliente.from('usuarios').select('nombre');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
             const u = new URLSearchParams(window.location.search).get('usuario');
             if (u) { sel.value = u; }
             
-            // Cargamos de una vez al iniciar
             cargarTodo();
             sel.onchange = cargarTodo;
         }
@@ -48,22 +48,22 @@
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
 
-            // Si no tenemos los partidos en caché, los pedimos a la API
-            if (!cachedMatches) {
-                status.innerHTML = "Cargando partidos...";
-                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
-                const dataRes = await res.json();
-                cachedMatches = dataRes.matches || [];
-            }
+            // Si no hay caché, mostramos carga. Si hay caché, no bloqueamos la interfaz
+            if (!cachedMatches) status.innerHTML = "Cargando partidos...";
 
-            // Pedimos solo los pronósticos (es rápido comparado con la API externa)
-            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+            // Pedimos los datos: Si hay caché, la primera promesa se resuelve al instante
+            const [resData, pData] = await Promise.all([
+                !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
+                cliente.from('pronosticos').select('*')
+            ]);
             
+            if (!cachedMatches) cachedMatches = resData.matches || [];
+            const pronosticos = pData.data || [];
             const ahora = new Date().getTime();
             const unaHoraEnMs = 3600000;
 
             status.innerHTML = cachedMatches.map(m => {
-                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
                 const fechaPartido = new Date(m.utcDate).getTime();
                 
                 const esAdmin = (nombreVisitante === 'Emmanuel');
@@ -90,11 +90,10 @@
                 </div>`;
             }).join('');
 
-            // Tabla de posiciones
             let scores = {};
             cachedMatches.forEach(m => {
                 if (m.status === 'FINISHED') {
-                    pronosticos?.filter(x => x.partido_id == m.id).forEach(p => {
+                    pronosticos.filter(x => x.partido_id == m.id).forEach(p => {
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
