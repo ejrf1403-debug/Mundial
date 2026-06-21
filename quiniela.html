@@ -13,10 +13,10 @@
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                    <option value="">Cargando participantes...</option>
+                    <option value="">Selecciona tu nombre...</option>
                 </select>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando datos...</div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Cargando partidos...</div>
         </div>
         <div class="md:col-span-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
@@ -28,80 +28,99 @@
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
-        let cachedMatches = null;
-        let cachedPronosticos = null;
+        let cachedMatches = null; // Cache para no esperar 10s al cambiar de usuario
 
         async function init() {
-            // Lanzamos ambos procesos al mismo tiempo (en paralelo)
-            Promise.all([cargarUsuarios(), cargarPartidosYPronosticos()]);
-        }
-
-        async function cargarUsuarios() {
             const sel = document.getElementById('userSelector');
             const { data } = await cliente.from('usuarios').select('nombre');
-            sel.innerHTML = '<option value="">Selecciona tu nombre...</option>';
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
             const u = new URLSearchParams(window.location.search).get('usuario');
-            if (u) { sel.value = u; renderizar(); }
+            if (u) { sel.value = u; }
+            
+            // Cargamos de una vez al iniciar
+            cargarTodo();
+            sel.onchange = cargarTodo;
         }
 
-        async function cargarPartidosYPronosticos() {
-            // Traemos ambos datos en paralelo para no esperar uno tras otro
-            const [res, pRes] = await Promise.all([
-                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
-                cliente.from('pronosticos').select('*')
-            ]);
-            
-            const dataRes = await res.json();
-            cachedMatches = dataRes.matches || [];
-            cachedPronosticos = pRes.data || [];
-            
-            renderizar();
-        }
-
-        function renderizar() {
-            if (!cachedMatches) return;
-            
+        async function cargarTodo() {
             const status = document.getElementById('status');
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
+
+            // Si no tenemos los partidos en caché, los pedimos a la API
+            if (!cachedMatches) {
+                status.innerHTML = "Cargando partidos...";
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+                const dataRes = await res.json();
+                cachedMatches = dataRes.matches || [];
+            }
+
+            // Pedimos solo los pronósticos (es rápido comparado con la API externa)
+            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+            
             const ahora = new Date().getTime();
             const unaHoraEnMs = 3600000;
 
-            // Renderizar partidos
             status.innerHTML = cachedMatches.map(m => {
-                const p = cachedPronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
                 const fechaPartido = new Date(m.utcDate).getTime();
                 
-                const puedeEditar = (nombreVisitante === 'Emmanuel') || 
-                                   (usuarioSeleccionado !== "" && usuarioSeleccionado === nombreVisitante && (fechaPartido - ahora) > unaHoraEnMs);
+                const esAdmin = (nombreVisitante === 'Emmanuel');
+                const faltaMasDeUnaHora = (fechaPartido - ahora) > unaHoraEnMs;
+                const esMiPronostico = (usuarioSeleccionado !== "" && usuarioSeleccionado === nombreVisitante);
+                const puedeEditar = esAdmin || (esMiPronostico && faltaMasDeUnaHora);
+
+                let color = '';
+                if (m.status === 'FINISHED' && p) {
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
+                }
 
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
                     <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded" ${puedeEditar ? '' : 'disabled'}>
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded" ${puedeEditar ? '' : 'disabled'}>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
                     <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
                 </div>`;
             }).join('');
 
-            // Renderizar tabla (puedes reutilizar esta lógica)
-            // (La lógica de scores se mantiene igual, se llama cada vez que cambia el usuario)
+            // Tabla de posiciones
+            let scores = {};
+            cachedMatches.forEach(m => {
+                if (m.status === 'FINISHED') {
+                    pronosticos?.filter(x => x.partido_id == m.id).forEach(p => {
+                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                        const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                        const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                        if (!isNaN(pL)) {
+                           if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        }
+                    });
+                }
+            });
+            
+            document.getElementById('tablaContenido').innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => {
+                let medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "•";
+                return `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : ''}">
+                    <span class="truncate"><span class="mr-1">${medalla}</span>${i+1}. ${n}</span>
+                    <span class="font-bold">${s} pts</span>
+                </div>`;
+            }).join('');
         }
 
         async function guardar(id) {
             const u = document.getElementById('userSelector').value;
-            if(!u) return alert("Selecciona tu nombre");
-            // Guardamos y actualizamos localmente sin recargar todo de la API externa
+            if(!u) return alert("Selecciona tu nombre primero");
             await cliente.from('pronosticos').upsert({ nombre_usuario: u, partido_id: String(id), pronostico_local: parseInt(document.getElementById('l-'+id).value), pronostico_visitante: parseInt(document.getElementById('v-'+id).value) }, { onConflict: 'nombre_usuario, partido_id' });
-            alert("Guardado");
-            // Refrescamos solo los pronósticos
-            const { data } = await cliente.from('pronosticos').select('*');
-            cachedPronosticos = data;
-            renderizar();
+            alert("Guardado"); cargarTodo();
         }
-
-        document.getElementById('userSelector').onchange = renderizar;
         init();
     </script>
 </body>
