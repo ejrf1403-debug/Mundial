@@ -52,13 +52,22 @@
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
             if (!usuarioSeleccionado) return;
 
+            status.innerHTML = "Cargando partidos...";
+
             const [res, pData] = await Promise.all([
                 fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
                 cliente.from('pronosticos').select('*')
             ]);
             
-            const { matches } = await res.json();
+            const dataRes = await res.json();
+            const matches = dataRes.matches || []; 
             const pronosticos = pData.data;
+
+            if (matches.length === 0) {
+                status.innerHTML = "No hay partidos disponibles en este momento.";
+                return;
+            }
+
             const ahora = new Date().getTime();
 
             status.innerHTML = matches.map(m => {
