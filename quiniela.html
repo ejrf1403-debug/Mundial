@@ -28,20 +28,17 @@
 
     <script>
         const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
+        let cachedMatches = null; // Cache para no esperar 10s al cambiar de usuario
 
         async function init() {
             const sel = document.getElementById('userSelector');
-            const { data, error } = await cliente.from('usuarios').select('nombre');
-            
-            if (error) {
-                sel.innerHTML = '<option value="">Error de conexión</option>';
-                return;
-            }
-
+            const { data } = await cliente.from('usuarios').select('nombre');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
             const u = new URLSearchParams(window.location.search).get('usuario');
             if (u) { sel.value = u; }
+            
+            // Cargamos de una vez al iniciar
             cargarTodo();
             sel.onchange = cargarTodo;
         }
@@ -51,28 +48,27 @@
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
 
-            const [res, pData] = await Promise.all([
-                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import'),
-                cliente.from('pronosticos').select('*')
-            ]);
-            
-            const dataRes = await res.json();
-            const matches = dataRes.matches || []; 
-            const pronosticos = pData.data || [];
+            // Si no tenemos los partidos en caché, los pedimos a la API
+            if (!cachedMatches) {
+                status.innerHTML = "Cargando partidos...";
+                const res = await fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import');
+                const dataRes = await res.json();
+                cachedMatches = dataRes.matches || [];
+            }
 
+            // Pedimos solo los pronósticos (es rápido comparado con la API externa)
+            const { data: pronosticos } = await cliente.from('pronosticos').select('*');
+            
             const ahora = new Date().getTime();
             const unaHoraEnMs = 3600000;
 
-            status.innerHTML = matches.map(m => {
-                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+            status.innerHTML = cachedMatches.map(m => {
+                const p = pronosticos?.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
                 const fechaPartido = new Date(m.utcDate).getTime();
                 
-                // Reglas de negocio:
                 const esAdmin = (nombreVisitante === 'Emmanuel');
                 const faltaMasDeUnaHora = (fechaPartido - ahora) > unaHoraEnMs;
                 const esMiPronostico = (usuarioSeleccionado !== "" && usuarioSeleccionado === nombreVisitante);
-                
-                // Solo puedo editar si soy admin O (es mi pronóstico Y falta más de 1 hora)
                 const puedeEditar = esAdmin || (esMiPronostico && faltaMasDeUnaHora);
 
                 let color = '';
@@ -94,11 +90,11 @@
                 </div>`;
             }).join('');
 
-            // Lógica de tabla de posiciones
+            // Tabla de posiciones
             let scores = {};
-            matches.forEach(m => {
+            cachedMatches.forEach(m => {
                 if (m.status === 'FINISHED') {
-                    pronosticos.filter(x => x.partido_id == m.id).forEach(p => {
+                    pronosticos?.filter(x => x.partido_id == m.id).forEach(p => {
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
