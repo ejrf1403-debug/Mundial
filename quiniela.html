@@ -60,11 +60,13 @@
             ]);
             
             const dataRes = await res.json();
+            console.log("Respuesta de la API:", dataRes); // Diagnóstico para la consola
+            
             const matches = dataRes.matches || []; 
             const pronosticos = pData.data;
 
             if (matches.length === 0) {
-                status.innerHTML = "No hay partidos disponibles en este momento.";
+                status.innerHTML = "No hay partidos disponibles o hubo un error al cargar. Revisa la consola (F12).";
                 return;
             }
 
