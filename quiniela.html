@@ -101,21 +101,27 @@
             const localVal = document.getElementById('l-'+id).value;
             const visitVal = document.getElementById('v-'+id).value;
             
-            console.log("Guardando:", {u, id, localVal, visitVal});
+            btn.innerText = "...";
 
-            const { error } = await cliente.from('pronosticos').upsert({ 
-                nombre_usuario: u, 
-                partido_id: String(id), 
-                pronostico_local: parseInt(localVal), 
-                pronostico_visitante: parseInt(visitVal) 
-            }, { onConflict: 'nombre_usuario, partido_id' });
+            // 1. Buscar si ya existe el registro
+            const { data: existing } = await cliente
+                .from('pronosticos')
+                .select('id')
+                .eq('nombre_usuario', u)
+                .eq('partido_id', String(id))
+                .single();
+
+            // 2. Insertar o Actualizar
+            const { error } = existing 
+                ? await cliente.from('pronosticos').update({ pronostico_local: localVal, pronostico_visitante: visitVal }).eq('id', existing.id)
+                : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: localVal, pronostico_visitante: visitVal });
             
             if (error) {
-                console.error("Error Supabase:", error);
-                alert("Error: " + error.message);
+                alert("Error al guardar: " + error.message);
+                btn.innerText = "OK";
             } else {
                 btn.innerText = "✓";
-                setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500);
+                setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 800);
             }
         }
         init();
