@@ -18,7 +18,7 @@
             </div>
             <div id="status" class="bg-white p-4 rounded-xl shadow">Selecciona un usuario...</div>
         </div>
-        <div class="md:grid-cols-1">
+        <div class="md:col-span-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
                 <h2 class="text-lg font-bold mb-2">📊 Tabla de Posiciones</h2>
                 <div id="tablaContenido" class="space-y-1"></div>
@@ -33,16 +33,29 @@
         async function init() {
             const sel = document.getElementById('userSelector');
             const { data } = await cliente.from('usuarios').select('nombre');
-            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-            sel.onchange = cargarTodo;
+            
+            // Usamos un Set para evitar duplicados en el select
+            const nombresUnicos = [...new Set(data.map(u => u.nombre))];
+            nombresUnicos.forEach(n => sel.innerHTML += `<option value="${n}">${n}</option>`);
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('usuario')) {
+                sel.value = urlParams.get('usuario');
+                cargarTodo();
+            }
+            sel.onchange = () => {
+                const url = new URL(window.location);
+                url.searchParams.set('usuario', sel.value);
+                window.history.pushState({}, '', url);
+                cargarTodo();
+            };
         }
 
         async function cargarTodo() {
             const status = document.getElementById('status');
-            const usuarioSeleccionado = document.getElementById('userSelector').value;
-            if(!usuarioSeleccionado) return;
-
-            status.innerHTML = "Cargando...";
+            const u = document.getElementById('userSelector').value;
+            const urlUser = new URLSearchParams(window.location.search).get('usuario');
+            if(!u) return;
 
             const [resData, pData] = await Promise.all([
                 !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
@@ -53,17 +66,14 @@
             const pronosticos = pData.data || [];
 
             status.innerHTML = cachedMatches.map(m => {
-                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === usuarioSeleccionado);
+                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === u);
                 let color = '';
-                
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                     const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (!isNaN(pL)) {
-                        if (pL === rL && pV === rV) color = 'bg-green-300';
-                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
-                        else color = 'bg-red-300';
-                    }
+                    if (pL === rL && pV === rV) color = 'bg-green-300';
+                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                    else color = 'bg-red-300';
                 }
 
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
@@ -81,50 +91,35 @@
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (!isNaN(pL)) {
-                           if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
-                        }
+                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
                     });
                 }
             });
 
             document.getElementById('tablaContenido').innerHTML = Object.entries(scores)
                 .sort((a,b) => b[1]-a[1])
-                .map(([n, s]) => `<div class="flex justify-between p-1 border-b text-xs"><span>${n}</span><span class="font-bold">${s} pts</span></div>`)
-                .join('');
+                .map(([n, s], i) => {
+                    const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+                    const esMiPerfil = (n === u);
+                    return `<div class="flex justify-between p-1 border-b text-xs ${esMiPerfil ? 'bg-blue-100 font-bold' : ''}">
+                        <span>${medalla} ${i+1}. ${n}</span><span>${s} pts</span>
+                    </div>`;
+                }).join('');
         }
 
         async function guardar(id, event) {
-            // Normalización del nombre: Primera en mayúscula, resto en minúscula
-            let uRaw = document.getElementById('userSelector').value.trim();
-            let u = uRaw.charAt(0).toUpperCase() + uRaw.slice(1).toLowerCase();
-            
+            const u = document.getElementById('userSelector').value;
             const btn = event.target;
-            // Limpieza de valores: si es vacío, se guarda 0
-            let localVal = parseInt(document.getElementById('l-'+id).value) || 0;
-            let visitVal = parseInt(document.getElementById('v-'+id).value) || 0;
+            const l = parseInt(document.getElementById('l-'+id).value) || 0;
+            const v = parseInt(document.getElementById('v-'+id).value) || 0;
             
-            btn.innerText = "...";
-
-            const { data: existing } = await cliente
-                .from('pronosticos')
-                .select('id')
-                .eq('nombre_usuario', u)
-                .eq('partido_id', String(id))
-                .single();
-
-            const { error } = existing 
-                ? await cliente.from('pronosticos').update({ pronostico_local: localVal, pronostico_visitante: visitVal }).eq('id', existing.id)
-                : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: localVal, pronostico_visitante: visitVal });
+            const { data: ex } = await cliente.from('pronosticos').select('id').eq('nombre_usuario', u).eq('partido_id', String(id)).single();
+            const { error } = ex ? await cliente.from('pronosticos').update({ pronostico_local: l, pronostico_visitante: v }).eq('id', ex.id)
+                                 : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: l, pronostico_visitante: v });
             
-            if (error) {
-                alert("Error al guardar: " + error.message);
-                btn.innerText = "OK";
-            } else {
-                btn.innerText = "✓";
-                setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 800);
-            }
+            if (!error) { btn.innerText = "✓"; setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500); }
+            else alert("Error: " + error.message);
         }
         init();
     </script>
