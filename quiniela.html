@@ -96,14 +96,17 @@
         }
 
         async function guardar(id, event) {
-            const u = document.getElementById('userSelector').value;
+            // Normalización del nombre: Primera en mayúscula, resto en minúscula
+            let uRaw = document.getElementById('userSelector').value.trim();
+            let u = uRaw.charAt(0).toUpperCase() + uRaw.slice(1).toLowerCase();
+            
             const btn = event.target;
-            const localVal = document.getElementById('l-'+id).value;
-            const visitVal = document.getElementById('v-'+id).value;
+            // Limpieza de valores: si es vacío, se guarda 0
+            let localVal = parseInt(document.getElementById('l-'+id).value) || 0;
+            let visitVal = parseInt(document.getElementById('v-'+id).value) || 0;
             
             btn.innerText = "...";
 
-            // 1. Buscar si ya existe el registro
             const { data: existing } = await cliente
                 .from('pronosticos')
                 .select('id')
@@ -111,7 +114,6 @@
                 .eq('partido_id', String(id))
                 .single();
 
-            // 2. Insertar o Actualizar
             const { error } = existing 
                 ? await cliente.from('pronosticos').update({ pronostico_local: localVal, pronostico_visitante: visitVal }).eq('id', existing.id)
                 : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: localVal, pronostico_visitante: visitVal });
