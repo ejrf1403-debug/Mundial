@@ -32,7 +32,6 @@
 
         async function init() {
             const sel = document.getElementById('userSelector');
-            // Carga rápida de usuarios
             const { data } = await cliente.from('usuarios').select('nombre');
             data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
@@ -48,10 +47,8 @@
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             const nombreVisitante = new URLSearchParams(window.location.search).get('usuario');
 
-            // Si no hay caché, mostramos carga. Si hay caché, no bloqueamos la interfaz
             if (!cachedMatches) status.innerHTML = "Cargando partidos...";
 
-            // Pedimos los datos: Si hay caché, la primera promesa se resuelve al instante
             const [resData, pData] = await Promise.all([
                 !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
                 cliente.from('pronosticos').select('*')
@@ -86,7 +83,7 @@
                     <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
                     <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
                     <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
-                    <button onclick="guardar('${m.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
+                    <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
                 </div>`;
             }).join('');
 
@@ -114,11 +111,36 @@
             }).join('');
         }
 
-        async function guardar(id) {
+        async function guardar(id, event) {
             const u = document.getElementById('userSelector').value;
             if(!u) return alert("Selecciona tu nombre primero");
-            await cliente.from('pronosticos').upsert({ nombre_usuario: u, partido_id: String(id), pronostico_local: parseInt(document.getElementById('l-'+id).value), pronostico_visitante: parseInt(document.getElementById('v-'+id).value) }, { onConflict: 'nombre_usuario, partido_id' });
-            alert("Guardado"); cargarTodo();
+            
+            const btn = event.target;
+            btn.innerText = "...";
+            btn.disabled = true;
+
+            const { error } = await cliente
+                .from('pronosticos')
+                .upsert({ 
+                    nombre_usuario: u, 
+                    partido_id: String(id), 
+                    pronostico_local: parseInt(document.getElementById('l-'+id).value), 
+                    pronostico_visitante: parseInt(document.getElementById('v-'+id).value) 
+                }, { onConflict: 'nombre_usuario, partido_id' })
+                .select();
+
+            if (error) {
+                alert("Error al guardar: " + error.message);
+                btn.innerText = "OK";
+                btn.disabled = false;
+            } else {
+                btn.innerText = "✓";
+                setTimeout(() => {
+                    btn.innerText = "OK";
+                    btn.disabled = false;
+                    cargarTodo();
+                }, 500);
+            }
         }
         init();
     </script>
