@@ -60,7 +60,12 @@
             const unaHoraEnMs = 3600000;
 
             status.innerHTML = cachedMatches.map(m => {
-                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario == usuarioSeleccionado);
+                // CORRECCIÓN: Búsqueda flexible (ignora mayúsculas/espacios)
+                const p = pronosticos.find(x => 
+                    x.partido_id == m.id && 
+                    x.nombre_usuario?.trim().toLowerCase() === usuarioSeleccionado?.trim().toLowerCase()
+                );
+                
                 const fechaPartido = new Date(m.utcDate).getTime();
                 
                 const esAdmin = (nombreVisitante === 'Emmanuel');
@@ -96,53 +101,4 @@
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
                         if (!isNaN(pL)) {
                            if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
-                        }
-                    });
-                }
-            });
-            
-            document.getElementById('tablaContenido').innerHTML = Object.entries(scores).sort((a,b) => b[1]-a[1]).map(([n, s], i) => {
-                let medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "•";
-                return `<div class="flex justify-between p-1 border-b text-xs ${n === nombreVisitante ? 'bg-blue-100 font-bold' : ''}">
-                    <span class="truncate"><span class="mr-1">${medalla}</span>${i+1}. ${n}</span>
-                    <span class="font-bold">${s} pts</span>
-                </div>`;
-            }).join('');
-        }
-
-        async function guardar(id, event) {
-            const u = document.getElementById('userSelector').value;
-            if(!u) return alert("Selecciona tu nombre primero");
-            
-            const btn = event.target;
-            btn.innerText = "...";
-            btn.disabled = true;
-
-            const { error } = await cliente
-                .from('pronosticos')
-                .upsert({ 
-                    nombre_usuario: u, 
-                    partido_id: String(id), 
-                    pronostico_local: parseInt(document.getElementById('l-'+id).value), 
-                    pronostico_visitante: parseInt(document.getElementById('v-'+id).value) 
-                }, { onConflict: 'nombre_usuario, partido_id' })
-                .select();
-
-            if (error) {
-                alert("Error al guardar: " + error.message);
-                btn.innerText = "OK";
-                btn.disabled = false;
-            } else {
-                btn.innerText = "✓";
-                setTimeout(() => {
-                    btn.innerText = "OK";
-                    btn.disabled = false;
-                    cargarTodo();
-                }, 500);
-            }
-        }
-        init();
-    </script>
-</body>
-</html>
+                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV &&
