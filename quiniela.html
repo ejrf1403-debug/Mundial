@@ -5,18 +5,42 @@
     <title>Quiniela 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .quiniela-card { transition: all 0.3s ease; }
+        .quiniela-card:hover { transform: translateY(-2px); }
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
 </head>
-<body class="bg-slate-100 p-4">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="md:col-span-2">
-            <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold text-lg text-blue-600 bg-white shadow">
-                <option value="">Selecciona tu nombre...</option>
-            </select>
-            <div id="partidos" class="bg-white p-4 rounded-xl shadow space-y-2">Cargando partidos...</div>
+<body class="bg-gray-50 text-gray-900 font-sans p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <div class="mb-8 text-center">
+            <h1 class="text-4xl font-black text-blue-900 mb-2">🏆 QUINIELA 2026</h1>
+            <p class="text-gray-500 font-medium">Haz tus pronósticos y escala posiciones</p>
         </div>
-        <div id="tabla" class="bg-white p-4 rounded-xl shadow h-fit">
-            <h2 class="font-bold mb-4 border-b pb-2">📊 Tabla de Posiciones</h2>
-            <div id="tablaContenido" class="space-y-1"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="md:col-span-2">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+                    <label class="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Tu Usuario</label>
+                    <select id="userSelector" class="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-xl font-bold text-lg text-blue-600 focus:outline-none focus:border-blue-500 transition-all">
+                        <option value="">Selecciona quién eres...</option>
+                    </select>
+                </div>
+                
+                <div id="partidos" class="space-y-3">
+                    <p class="text-center text-gray-400 p-10">Selecciona un usuario para cargar los partidos...</p>
+                </div>
+            </div>
+
+            <div class="md:col-span-1">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-8">
+                    <h2 class="font-black text-xl mb-6 flex items-center">
+                        <span class="mr-2">📊</span> Top Posiciones
+                    </h2>
+                    <div id="tablaContenido" class="space-y-3"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -27,12 +51,11 @@
         async function init() {
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
-            // Quitamos duplicados visuales
-            const unicos = [...new Set(data.map(u => u.nombre.trim()))];
+            const unicos = [...new Set(data.map(u => u.nombre.trim()))].sort();
             unicos.forEach(n => sel.innerHTML += `<option value="${n}">${n}</option>`);
             
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('u')) { sel.value = params.get('u'); cargarTodo(); }
+            const p = new URLSearchParams(window.location.search);
+            if (p.has('u')) { sel.value = p.get('u'); cargarTodo(); }
             sel.onchange = () => { cargarTodo(); };
         }
 
@@ -50,23 +73,25 @@
 
             document.getElementById('partidos').innerHTML = matches.map(m => {
                 const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === u);
-                let color = "";
+                let color = "bg-white";
                 if(m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                     const pL = p.pronostico_local, pV = p.pronostico_visitante;
-                    color = (pL === rL && pV === rV) ? 'bg-green-300' : 
-                            ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) ? 'bg-yellow-300' : 'bg-red-300';
+                    color = (pL === rL && pV === rV) ? 'bg-green-50' : 
+                            ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) ? 'bg-yellow-50' : 'bg-red-50';
                 }
 
-                return `<div class="flex items-center gap-2 p-2 border-b">
-                    <span class="text-xs w-1/2 truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? 0}" class="w-12 border text-center rounded ${color}">
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? 0}" class="w-12 border text-center rounded ${color}">
-                    <button onclick="guardar('${m.id}')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600">OK</button>
+                return `<div class="quiniela-card ${color} p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                    <span class="text-sm font-semibold w-2/5 truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
+                    <div class="flex gap-2">
+                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? 0}" class="w-12 h-10 border-2 rounded-lg text-center font-bold">
+                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? 0}" class="w-12 h-10 border-2 rounded-lg text-center font-bold">
+                    </div>
+                    <button onclick="guardar('${m.id}')" class="bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-800">OK</button>
                 </div>`;
             }).join('');
 
-            // Cálculo tabla
+            // Lógica de tabla (igual que antes)
             let scores = {};
             matches.forEach(m => {
                 if(m.status === 'FINISHED') {
@@ -83,31 +108,21 @@
 
             document.getElementById('tablaContenido').innerHTML = Object.entries(scores)
                 .sort((a,b) => b[1]-a[1])
-                .map(([n, s], i) => {
-                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-                    return `<div class="flex justify-between p-1 border-b text-sm ${n===u ? 'bg-blue-100 font-bold' : ''}">
-                        <span>${medal} ${i+1}. ${n}</span> <span>${s} pts</span>
-                    </div>`;
-                }).join('');
+                .map(([n, s], i) => `
+                    <div class="flex items-center justify-between p-3 rounded-lg ${n===u ? 'bg-blue-50 border-2 border-blue-200' : 'bg-gray-50'}">
+                        <span class="font-bold">${i < 3 ? ['🥇','🥈','🥉'][i] : (i+1)+'.'} ${n}</span>
+                        <span class="font-black text-blue-900">${s} pts</span>
+                    </div>`).join('');
         }
 
         async function guardar(id) {
             const u = document.getElementById('userSelector').value;
             const l = parseInt(document.getElementById('l-'+id).value);
             const v = parseInt(document.getElementById('v-'+id).value);
-            
-            // BUSCAR SI EXISTE ANTES DE INSERTAR (Soluciona el problema de "no guarda")
             const { data: ex } = await cliente.from('pronosticos').select('id').eq('nombre_usuario', u).eq('partido_id', String(id)).single();
-            
-            let res;
-            if (ex) {
-                res = await cliente.from('pronosticos').update({ pronostico_local: l, pronostico_visitante: v }).eq('id', ex.id);
-            } else {
-                res = await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: l, pronostico_visitante: v });
-            }
-
-            if (res.error) alert("Error: " + res.error.message);
-            else cargarTodo();
+            const { error } = ex ? await cliente.from('pronosticos').update({ pronostico_local: l, pronostico_visitante: v }).eq('id', ex.id)
+                                 : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: l, pronostico_visitante: v });
+            if (!error) cargarTodo(); else alert("Error al guardar.");
         }
         init();
     </script>
