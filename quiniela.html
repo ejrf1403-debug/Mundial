@@ -34,13 +34,13 @@
             const sel = document.getElementById('userSelector');
             const { data } = await cliente.from('usuarios').select('nombre');
             
-            // Usamos un Set para evitar duplicados en el select
-            const nombresUnicos = [...new Set(data.map(u => u.nombre))];
+            // Filtramos nombres únicos para evitar duplicados en el selector
+            const nombresUnicos = [...new Set(data.map(u => u.nombre.trim()))];
             nombresUnicos.forEach(n => sel.innerHTML += `<option value="${n}">${n}</option>`);
             
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('usuario')) {
-                sel.value = urlParams.get('usuario');
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('usuario')) {
+                sel.value = params.get('usuario');
                 cargarTodo();
             }
             sel.onchange = () => {
@@ -54,32 +54,25 @@
         async function cargarTodo() {
             const status = document.getElementById('status');
             const u = document.getElementById('userSelector').value;
-            const urlUser = new URLSearchParams(window.location.search).get('usuario');
             if(!u) return;
 
-            const [resData, pData] = await Promise.all([
+            status.innerHTML = "Cargando...";
+
+            const [res, pronosticosRes] = await Promise.all([
                 !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
                 cliente.from('pronosticos').select('*')
             ]);
             
-            if (!cachedMatches) cachedMatches = resData.matches || [];
-            const pronosticos = pData.data || [];
+            if (!cachedMatches) cachedMatches = res.matches || [];
+            const pronosticos = pronosticosRes.data || [];
 
             status.innerHTML = cachedMatches.map(m => {
                 const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === u);
-                let color = '';
-                if (m.status === 'FINISHED' && p) {
-                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
-                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    if (pL === rL && pV === rV) color = 'bg-green-300';
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
-                    else color = 'bg-red-300';
-                }
-
+                
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
                     <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}">
-                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}">
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded">
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded">
                     <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2 py-1 rounded text-xs">OK</button>
                 </div>`;
             }).join('');
@@ -91,8 +84,10 @@
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        if (!isNaN(pL)) {
+                            if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                            else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        }
                     });
                 }
             });
@@ -101,8 +96,7 @@
                 .sort((a,b) => b[1]-a[1])
                 .map(([n, s], i) => {
                     const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-                    const esMiPerfil = (n === u);
-                    return `<div class="flex justify-between p-1 border-b text-xs ${esMiPerfil ? 'bg-blue-100 font-bold' : ''}">
+                    return `<div class="flex justify-between p-1 border-b text-xs ${n === u ? 'bg-blue-200 font-bold' : ''}">
                         <span>${medalla} ${i+1}. ${n}</span><span>${s} pts</span>
                     </div>`;
                 }).join('');
@@ -110,16 +104,30 @@
 
         async function guardar(id, event) {
             const u = document.getElementById('userSelector').value;
+            const l = document.getElementById('l-'+id).value;
+            const v = document.getElementById('v-'+id).value;
             const btn = event.target;
-            const l = parseInt(document.getElementById('l-'+id).value) || 0;
-            const v = parseInt(document.getElementById('v-'+id).value) || 0;
+
+            if (l === "" || v === "") return alert("Debes llenar ambos marcadores");
+
+            btn.innerText = "⏳";
             
-            const { data: ex } = await cliente.from('pronosticos').select('id').eq('nombre_usuario', u).eq('partido_id', String(id)).single();
-            const { error } = ex ? await cliente.from('pronosticos').update({ pronostico_local: l, pronostico_visitante: v }).eq('id', ex.id)
-                                 : await cliente.from('pronosticos').insert({ nombre_usuario: u, partido_id: String(id), pronostico_local: l, pronostico_visitante: v });
-            
-            if (!error) { btn.innerText = "✓"; setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500); }
-            else alert("Error: " + error.message);
+            // Usamos UPSERT con el nombre y el ID. Asegúrate que en Supabase esto tenga el UNIQUE INDEX que vimos antes.
+            const { error } = await cliente.from('pronosticos').upsert({ 
+                nombre_usuario: u, 
+                partido_id: String(id), 
+                pronostico_local: parseInt(l), 
+                pronostico_visitante: parseInt(v) 
+            }, { onConflict: 'nombre_usuario, partido_id' });
+
+            if (error) {
+                console.error("Error:", error);
+                alert("Error: " + error.message);
+                btn.innerText = "OK";
+            } else {
+                btn.innerText = "✓";
+                setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500);
+            }
         }
         init();
     </script>
