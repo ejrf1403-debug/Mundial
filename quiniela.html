@@ -42,6 +42,8 @@
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             if(!usuarioSeleccionado) return;
 
+            status.innerHTML = "Cargando...";
+
             const [resData, pData] = await Promise.all([
                 !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
                 cliente.from('pronosticos').select('*')
@@ -50,7 +52,6 @@
             if (!cachedMatches) cachedMatches = resData.matches || [];
             const pronosticos = pData.data || [];
 
-            // 1. PINTAR PARTIDOS Y COLORES
             status.innerHTML = cachedMatches.map(m => {
                 const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === usuarioSeleccionado);
                 let color = '';
@@ -58,10 +59,11 @@
                 if (m.status === 'FINISHED' && p) {
                     const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                     const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                    
-                    if (pL === rL && pV === rV) color = 'bg-green-300'; // Acierto exacto
-                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300'; // Acierto ganador
-                    else color = 'bg-red-300'; // Fallo
+                    if (!isNaN(pL)) {
+                        if (pL === rL && pV === rV) color = 'bg-green-300';
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300';
+                        else color = 'bg-red-300';
+                    }
                 }
 
                 return `<div class="flex items-center justify-between border-b py-2 gap-2">
@@ -72,7 +74,6 @@
                 </div>`;
             }).join('');
 
-            // 2. CALCULAR TABLA
             let scores = {};
             cachedMatches.forEach(m => {
                 if (m.status === 'FINISHED') {
@@ -80,8 +81,10 @@
                         if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
                         const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
                         const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        if (!isNaN(pL)) {
+                           if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                        }
                     });
                 }
             });
@@ -95,15 +98,26 @@
         async function guardar(id, event) {
             const u = document.getElementById('userSelector').value;
             const btn = event.target;
+            const localVal = document.getElementById('l-'+id).value;
+            const visitVal = document.getElementById('v-'+id).value;
+            
+            console.log("Guardando:", {u, id, localVal, visitVal});
+
             const { error } = await cliente.from('pronosticos').upsert({ 
-                nombre_usuario: u, partido_id: String(id), 
-                pronostico_local: parseInt(document.getElementById('l-'+id).value), 
-                pronostico_visitante: parseInt(document.getElementById('v-'+id).value) 
+                nombre_usuario: u, 
+                partido_id: String(id), 
+                pronostico_local: parseInt(localVal), 
+                pronostico_visitante: parseInt(visitVal) 
             }, { onConflict: 'nombre_usuario, partido_id' });
             
-            if (!error) { btn.innerText = "✓"; setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500); }
+            if (error) {
+                console.error("Error Supabase:", error);
+                alert("Error: " + error.message);
+            } else {
+                btn.innerText = "✓";
+                setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500);
+            }
         }
-
         init();
     </script>
 </body>
