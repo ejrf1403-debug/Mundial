@@ -13,10 +13,10 @@
             <div class="bg-white p-4 rounded-xl shadow">
                 <h1 class="text-xl font-bold mb-4 text-center">🏆 Quiniela 2026</h1>
                 <select id="userSelector" class="w-full p-2 border rounded-lg mb-2 font-bold text-red-600 bg-red-50">
-                    <option value="">Cargando usuarios...</option>
+                    <option value="">Selecciona tu nombre...</option>
                 </select>
             </div>
-            <div id="status" class="bg-white p-4 rounded-xl shadow">Esperando selección...</div>
+            <div id="status" class="bg-white p-4 rounded-xl shadow">Selecciona un usuario...</div>
         </div>
         <div class="md:grid-cols-1">
             <div class="bg-white p-4 rounded-xl shadow sticky top-4">
@@ -32,28 +32,9 @@
 
         async function init() {
             const sel = document.getElementById('userSelector');
-            
-            // 1. CARGA DE USUARIOS INDEPENDIENTE
-            try {
-                const { data, error } = await cliente.from('usuarios').select('nombre');
-                if (error) throw error;
-
-                sel.innerHTML = '<option value="">Selecciona tu nombre...</option>';
-                data?.forEach(u => {
-                    const opt = document.createElement('option');
-                    opt.value = u.nombre;
-                    opt.textContent = u.nombre;
-                    sel.appendChild(opt);
-                });
-                
-                const u = new URLSearchParams(window.location.search).get('usuario');
-                if (u) { sel.value = u; cargarTodo(); }
-                
-                sel.onchange = cargarTodo;
-            } catch (err) {
-                console.error("Error cargando usuarios:", err);
-                sel.innerHTML = '<option value="">Error al cargar usuarios</option>';
-            }
+            const { data } = await cliente.from('usuarios').select('nombre');
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            sel.onchange = cargarTodo;
         }
 
         async function cargarTodo() {
@@ -61,46 +42,66 @@
             const usuarioSeleccionado = document.getElementById('userSelector').value;
             if(!usuarioSeleccionado) return;
 
-            status.innerHTML = "Cargando partidos...";
+            const [resData, pData] = await Promise.all([
+                !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
+                cliente.from('pronosticos').select('*')
+            ]);
+            
+            if (!cachedMatches) cachedMatches = resData.matches || [];
+            const pronosticos = pData.data || [];
 
-            try {
-                const [resData, pData] = await Promise.all([
-                    !cachedMatches ? fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()) : { matches: cachedMatches },
-                    cliente.from('pronosticos').select('*')
-                ]);
+            // 1. PINTAR PARTIDOS Y COLORES
+            status.innerHTML = cachedMatches.map(m => {
+                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === usuarioSeleccionado);
+                let color = '';
                 
-                if (!cachedMatches) cachedMatches = resData.matches || [];
-                const pronosticos = pData.data || [];
-                
-                status.innerHTML = cachedMatches.map(m => {
-                    const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario?.toLowerCase() === usuarioSeleccionado.toLowerCase());
+                if (m.status === 'FINISHED' && p) {
+                    const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                    const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
                     
-                    return `<div class="flex items-center justify-between border-b py-2 gap-2">
-                        <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded">
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded">
-                        <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2 py-1 rounded text-xs">OK</button>
-                    </div>`;
-                }).join('');
-            } catch (e) {
-                status.innerHTML = "Error al conectar con la base de datos.";
-            }
+                    if (pL === rL && pV === rV) color = 'bg-green-300'; // Acierto exacto
+                    else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) color = 'bg-yellow-300'; // Acierto ganador
+                    else color = 'bg-red-300'; // Fallo
+                }
+
+                return `<div class="flex items-center justify-between border-b py-2 gap-2">
+                    <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
+                    <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}">
+                    <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}">
+                    <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2 py-1 rounded text-xs">OK</button>
+                </div>`;
+            }).join('');
+
+            // 2. CALCULAR TABLA
+            let scores = {};
+            cachedMatches.forEach(m => {
+                if (m.status === 'FINISHED') {
+                    pronosticos.filter(x => x.partido_id == m.id).forEach(p => {
+                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
+                        const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
+                        const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
+                        if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
+                        else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) scores[p.nombre_usuario] += 1;
+                    });
+                }
+            });
+
+            document.getElementById('tablaContenido').innerHTML = Object.entries(scores)
+                .sort((a,b) => b[1]-a[1])
+                .map(([n, s]) => `<div class="flex justify-between p-1 border-b text-xs"><span>${n}</span><span class="font-bold">${s} pts</span></div>`)
+                .join('');
         }
 
         async function guardar(id, event) {
             const u = document.getElementById('userSelector').value;
             const btn = event.target;
-            btn.innerText = "...";
-            
             const { error } = await cliente.from('pronosticos').upsert({ 
-                nombre_usuario: u, 
-                partido_id: String(id), 
+                nombre_usuario: u, partido_id: String(id), 
                 pronostico_local: parseInt(document.getElementById('l-'+id).value), 
                 pronostico_visitante: parseInt(document.getElementById('v-'+id).value) 
             }, { onConflict: 'nombre_usuario, partido_id' });
-
-            if (error) { alert("Error: " + error.message); btn.innerText = "OK"; }
-            else { btn.innerText = "✓"; setTimeout(() => { btn.innerText = "OK"; }, 1000); }
+            
+            if (!error) { btn.innerText = "✓"; setTimeout(() => { btn.innerText = "OK"; cargarTodo(); }, 500); }
         }
 
         init();
