@@ -32,14 +32,30 @@
 
         async function init() {
             const sel = document.getElementById('userSelector');
-            const { data } = await cliente.from('usuarios').select('nombre');
-            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             
-            const u = new URLSearchParams(window.location.search).get('usuario');
-            if (u) { sel.value = u; }
-            
-            cargarTodo();
-            sel.onchange = cargarTodo;
+            try {
+                const { data, error } = await cliente.from('usuarios').select('nombre');
+                if (error) throw error;
+
+                sel.innerHTML = '<option value="">Selecciona tu nombre...</option>';
+                data?.forEach(u => {
+                    if (u.nombre) {
+                        const opt = document.createElement('option');
+                        opt.value = u.nombre;
+                        opt.textContent = u.nombre;
+                        sel.appendChild(opt);
+                    }
+                });
+                
+                const u = new URLSearchParams(window.location.search).get('usuario');
+                if (u) { sel.value = u; }
+                
+                cargarTodo();
+                sel.onchange = cargarTodo;
+            } catch (err) {
+                console.error("Error inicializando:", err);
+                document.getElementById('status').innerHTML = "Error cargando usuarios.";
+            }
         }
 
         async function cargarTodo() {
@@ -60,14 +76,13 @@
             const unaHoraEnMs = 3600000;
 
             status.innerHTML = cachedMatches.map(m => {
-                // CORRECCIÓN: Búsqueda flexible (ignora mayúsculas/espacios)
+                // Búsqueda robusta (ignora espacios y mayúsculas)
                 const p = pronosticos.find(x => 
                     x.partido_id == m.id && 
                     x.nombre_usuario?.trim().toLowerCase() === usuarioSeleccionado?.trim().toLowerCase()
                 );
                 
                 const fechaPartido = new Date(m.utcDate).getTime();
-                
                 const esAdmin = (nombreVisitante === 'Emmanuel');
                 const faltaMasDeUnaHora = (fechaPartido - ahora) > unaHoraEnMs;
                 const esMiPronostico = (usuarioSeleccionado !== "" && usuarioSeleccionado === nombreVisitante);
@@ -88,17 +103,4 @@
                     <span class="w-1/2 text-xs truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
                     <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
                     <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? ''}" class="w-10 border text-center rounded ${color}" ${puedeEditar ? '' : 'disabled'}>
-                    <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2 py-1 rounded text-xs ${puedeEditar ? '' : 'hidden'}">OK</button>
-                </div>`;
-            }).join('');
-
-            let scores = {};
-            cachedMatches.forEach(m => {
-                if (m.status === 'FINISHED') {
-                    pronosticos.filter(x => x.partido_id == m.id).forEach(p => {
-                        if (!scores[p.nombre_usuario]) scores[p.nombre_usuario] = 0;
-                        const rL = m.score?.fullTime?.home, rV = m.score?.fullTime?.away;
-                        const pL = parseInt(p.pronostico_local), pV = parseInt(p.pronostico_visitante);
-                        if (!isNaN(pL)) {
-                           if (pL === rL && pV === rV) scores[p.nombre_usuario] += 3;
-                           else if ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV &&
+                    <button onclick="guardar('${m.id}', event)" class="bg-green-600 text-white px-2
