@@ -14,7 +14,7 @@
     </select>
     
     <div id="partidos" class="bg-white p-4 rounded shadow">
-        <p class="text-gray-500 text-center">Cargando partidos...</p>
+        <p class="text-gray-500 text-center">Selecciona un usuario para cargar los partidos...</p>
     </div>
 
     <script>
@@ -37,26 +37,31 @@
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            // 1. Obtener partidos de la API
-            const response = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
-                headers: { 'X-Auth-Token': API_KEY }
-            });
-            const data = await response.json();
+            // Usamos el proxy para evitar el error CORS
+            const proxyUrl = 'https://corsproxy.io/?https://api.football-data.org/v4/competitions/WC/matches';
             
-            // 2. Obtener pronósticos del usuario
-            const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
+            try {
+                const response = await fetch(proxyUrl, {
+                    headers: { 'X-Auth-Token': API_KEY }
+                });
+                const data = await response.json();
+                
+                const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
 
-            // 3. Pintar en pantalla
-            document.getElementById('partidos').innerHTML = data.matches.slice(0, 10).map(m => {
-                const p = pronos?.find(x => x.partido_id == m.id);
-                return `
-                    <div class="flex items-center gap-2 p-3 border-b text-sm">
-                        <span class="w-1/2">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
-                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
-                        <button onclick="guardar('${m.id}', '${m.homeTeam.name} vs ${m.awayTeam.name}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
-                    </div>`;
-            }).join('');
+                document.getElementById('partidos').innerHTML = data.matches.slice(0, 10).map(m => {
+                    const p = pronos?.find(x => x.partido_id == m.id);
+                    return `
+                        <div class="flex items-center gap-2 p-3 border-b text-sm">
+                            <span class="w-1/2">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                            <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
+                            <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
+                            <button onclick="guardar('${m.id}', '${m.homeTeam.name} vs ${m.awayTeam.name}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
+                        </div>`;
+                }).join('');
+            } catch (error) {
+                console.error("Error cargando partidos:", error);
+                document.getElementById('partidos').innerHTML = "<p class='text-red-500'>Error al cargar partidos. Intenta de nuevo.</p>";
+            }
         }
 
         async function guardar(id, nombrePartido) {
@@ -72,8 +77,11 @@
                 partido_nombre: nombrePartido
             });
             
-            if (error) alert("Error: " + error.message);
-            else alert("¡Pronóstico guardado!");
+            if (error) {
+                alert("Error al guardar: " + error.message);
+            } else {
+                alert("¡Pronóstico guardado exitosamente!");
+            }
         }
 
         init();
