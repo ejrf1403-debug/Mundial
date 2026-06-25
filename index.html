@@ -37,15 +37,23 @@
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            // ✅ Usamos corsproxy.io, que permite pasar el token como parámetro
             const targetUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
-            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&x-auth-token=${API_KEY}`;
+            
+            // ✅ Codificamos las cabeceras (incluyendo el token) en base64 para el proxy
+            const headers = { "X-Auth-Token": API_KEY };
+            const headersBase64 = btoa(JSON.stringify(headers));
+            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&headers=${headersBase64}`;
             
             try {
-                // Ya no enviamos cabeceras, solo una petición GET normal
+                // Petición simple sin cabeceras propias
                 const response = await fetch(proxyUrl);
-                const data = await response.json(); // La respuesta ya es el JSON de la API
+                const data = await response.json();
                 
+                // Verificamos que la API nos devolvió partidos reales
+                if (!data.matches || !Array.isArray(data.matches)) {
+                    throw new Error("La API no devolvió partidos. Puede que el token sea inválido o hayas alcanzado el límite de peticiones.");
+                }
+
                 const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
 
                 document.getElementById('partidos').innerHTML = data.matches.slice(0, 10).map(m => {
@@ -60,7 +68,7 @@
                 }).join('');
             } catch (error) {
                 console.error("Error cargando partidos:", error);
-                document.getElementById('partidos').innerHTML = "<p class='text-red-500'>Error al cargar partidos. Intenta de nuevo.</p>";
+                document.getElementById('partidos').innerHTML = `<p class='text-red-500'>${error.message}</p>`;
             }
         }
 
