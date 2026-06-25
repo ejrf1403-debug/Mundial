@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
     <title>Quiniela 2026</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="p-4 bg-gray-100">
-    <h1 class="text-2xl font-bold mb-4">Quiniela 2026</h1>
+    <h1 class="text-2xl font-bold mb-4 text-center">Quiniela 2026</h1>
+    
     <select id="userSelector" class="w-full p-2 mb-4 border rounded" onchange="cargar()">
         <option value="">Selecciona tu nombre...</option>
     </select>
-    <div id="partidos" class="bg-white p-4 rounded shadow"></div>
+    
+    <div id="partidos" class="bg-white p-4 rounded shadow">
+        <p class="text-gray-500 text-center">Selecciona un usuario para ver los partidos</p>
+    </div>
 
     <script>
         const cliente = supabase.createClient(
@@ -19,7 +24,7 @@
         );
 
         async function init() {
-            const { data } = await cliente.from('usuarios').select('nombre');
+            const { data, error } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
             if (data) {
                 data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
@@ -36,17 +41,16 @@
                 { id: "3", home: "Francia", away: "Alemania" }
             ];
             
-            // Traemos los pronósticos existentes
             const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
             
             document.getElementById('partidos').innerHTML = partidos.map(m => {
                 const p = pronos?.find(x => x.partido_id == m.id);
                 return `
-                    <div class="flex items-center gap-2 p-2 border-b">
-                        <span class="text-sm w-1/2 truncate">${m.home} vs ${m.away}</span>
-                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
-                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
-                        <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
+                    <div class="flex items-center gap-2 p-3 border-b">
+                        <span class="text-sm w-1/2 font-medium">${m.home} vs ${m.away}</span>
+                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-12 border text-center rounded">
+                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-12 border text-center rounded">
+                        <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">OK</button>
                     </div>`;
             }).join('');
         }
@@ -56,19 +60,20 @@
             const l = document.getElementById(`l-${id}`).value;
             const v = document.getElementById(`v-${id}`).value;
             
-            // Usamos .upsert para insertar o actualizar si ya existe
-            const { error } = await cliente.from('pronosticos').upsert({
+            const payload = {
                 nombre_usuario: u,
                 partido_id: id,
-                pronostico_local: parseInt(l),
-                pronostico_visitante: parseInt(v)
-            }, { onConflict: 'nombre_usuario, partido_id' }); // Esto evita errores de duplicados
+                pronostico_local: parseInt(l) || 0,
+                pronostico_visitante: parseInt(v) || 0
+            };
+
+            const { error } = await cliente.from('pronosticos').upsert(payload);
             
             if (error) {
-                console.error(error);
+                console.error("Error al guardar:", error);
                 alert("Error al guardar: " + error.message);
             } else {
-                alert("¡Guardado exitosamente!");
+                alert("¡Pronóstico guardado exitosamente!");
             }
         }
 
