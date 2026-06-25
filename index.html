@@ -38,20 +38,21 @@
             if (!u) return;
 
             const targetUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
-            
-            // ✅ Codificamos las cabeceras (incluyendo el token) en base64 para el proxy
             const headers = { "X-Auth-Token": API_KEY };
             const headersBase64 = btoa(JSON.stringify(headers));
             const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&headers=${headersBase64}`;
             
             try {
-                // Petición simple sin cabeceras propias
                 const response = await fetch(proxyUrl);
                 const data = await response.json();
                 
-                // Verificamos que la API nos devolvió partidos reales
+                // Mostramos el contenido real que devuelve la API (para diagnóstico)
+                console.log("Respuesta de la API:", data);
+                
                 if (!data.matches || !Array.isArray(data.matches)) {
-                    throw new Error("La API no devolvió partidos. Puede que el token sea inválido o hayas alcanzado el límite de peticiones.");
+                    // Si no hay partidos, mostramos el error devuelto por la API
+                    const errorMsg = data.message || data.error || JSON.stringify(data);
+                    throw new Error("Error de la API: " + errorMsg);
                 }
 
                 const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
