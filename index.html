@@ -37,16 +37,14 @@
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            // Usamos un proxy diferente y más confiable
+            // ✅ Usamos corsproxy.io, que permite pasar el token como parámetro
             const targetUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&x-auth-token=${API_KEY}`;
             
             try {
-                const response = await fetch(proxyUrl, {
-                    headers: { 'X-Auth-Token': API_KEY }
-                });
-                const jsonResponse = await response.json();
-                const data = JSON.parse(jsonResponse.contents);
+                // Ya no enviamos cabeceras, solo una petición GET normal
+                const response = await fetch(proxyUrl);
+                const data = await response.json(); // La respuesta ya es el JSON de la API
                 
                 const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
 
