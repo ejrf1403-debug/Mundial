@@ -2,19 +2,19 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Quiniela Champions</title>
+    <title>Quiniela 2026 - Control Manual</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="p-4 bg-gray-100">
-    <h1 class="text-2xl font-bold mb-4 text-center">Quiniela Champions</h1>
+    <h1 class="text-2xl font-bold mb-4 text-center">Quiniela 2026</h1>
     
     <select id="userSelector" class="w-full p-2 mb-4 border rounded" onchange="cargarPartidos()">
         <option value="">Selecciona tu nombre...</option>
     </select>
     
-    <div id="partidos" class="bg-white p-4 rounded shadow">
-        <p class="text-gray-500 text-center">Selecciona un usuario para cargar los partidos...</p>
+    <div id="partidos" class="space-y-4">
+        <p class="text-center">Selecciona un usuario para empezar.</p>
     </div>
 
     <script>
@@ -23,78 +23,46 @@
             "sb_publishable_dbe1TJq4ay0tylJGVZ2mKg_ljzOxigY"
         );
 
-        const API_KEY = '8bd17a06ad9c42b8940faa3869f2ed55';
-
-        async function init() {
-            const { data } = await cliente.from('usuarios').select('nombre');
-            const sel = document.getElementById('userSelector');
-            if (data) {
-                data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
-            }
-        }
-
         async function cargarPartidos() {
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            // ⚽ Probamos con Champions League (CL), disponible en el plan gratuito
-            const targetUrl = 'https://api.football-data.org/v4/competitions/CL/matches';
-            const headers = { "X-Auth-Token": API_KEY };
-            const headersBase64 = btoa(JSON.stringify(headers));
-            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&headers=${headersBase64}`;
-            
-            try {
-                const response = await fetch(proxyUrl);
-                
-                // Si el proxy o la API devuelven un código de error, lo mostramos
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Error ${response.status}: ${errorText}`);
-                }
+            const { data: listaPartidos } = await cliente.from('partidos').select('*').order('fecha');
+            const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
 
-                const data = await response.json();
-                console.log("Respuesta:", data);
-                
-                if (!data.matches || !Array.isArray(data.matches)) {
-                    throw new Error("La API no devolvió partidos. Respuesta: " + JSON.stringify(data));
-                }
+            const container = document.getElementById('partidos');
+            container.innerHTML = '';
 
-                const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
-
-                document.getElementById('partidos').innerHTML = data.matches.slice(0, 10).map(m => {
-                    const p = pronos?.find(x => x.partido_id == m.id);
-                    return `
-                        <div class="flex items-center gap-2 p-3 border-b text-sm">
-                            <span class="w-1/2">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
-                            <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
-                            <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
-                            <button onclick="guardar('${m.id}', '${m.homeTeam.name} vs ${m.awayTeam.name}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
-                        </div>`;
-                }).join('');
-            } catch (error) {
-                console.error("Error:", error);
-                document.getElementById('partidos').innerHTML = `<p class='text-red-500'>${error.message}</p>`;
-            }
+            listaPartidos.forEach(m => {
+                const p = pronos?.find(x => x.partido_id == m.id);
+                container.innerHTML += `
+                    <div class="bg-white p-3 rounded shadow flex items-center gap-2 text-sm">
+                        <div class="w-1/4 font-bold text-xs text-blue-600">${m.fase}</div>
+                        <span class="w-1/2">${m.nombre_local} vs ${m.nombre_visitante}</span>
+                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
+                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
+                        <button onclick="guardar('${m.id}', '${m.nombre_local} vs ${m.nombre_visitante}')" class="bg-green-600 text-white px-2 py-1 rounded">OK</button>
+                    </div>`;
+            });
         }
 
-        async function guardar(id, nombrePartido) {
+        async function guardar(id, nombre) {
             const u = document.getElementById('userSelector').value;
-            const l = document.getElementById(`l-${id}`).value;
-            const v = document.getElementById(`v-${id}`).value;
-            
             const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: u,
-                partido_id: id.toString(),
-                pronostico_local: parseInt(l),
-                pronostico_visitante: parseInt(v),
-                partido_nombre: nombrePartido
+                partido_id: id,
+                pronostico_local: parseInt(document.getElementById(`l-${id}`).value),
+                pronostico_visitante: parseInt(document.getElementById(`v-${id}`).value),
+                partido_nombre: nombre
             });
-            
-            if (error) {
-                alert("Error al guardar: " + error.message);
-            } else {
-                alert("¡Pronóstico guardado exitosamente!");
-            }
+            if (error) alert("Error: " + error.message);
+            else alert("¡Guardado!");
+        }
+
+        async function init() {
+            const { data } = await cliente.from('usuarios').select('nombre');
+            const sel = document.getElementById('userSelector');
+            data?.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
         }
 
         init();
