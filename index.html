@@ -9,12 +9,12 @@
 <body class="p-4 bg-gray-100">
     <h1 class="text-2xl font-bold mb-4 text-center">Quiniela 2026</h1>
     
-    <select id="userSelector" class="w-full p-2 mb-4 border rounded" onchange="cargar()">
+    <select id="userSelector" class="w-full p-2 mb-4 border rounded" onchange="cargarPartidos()">
         <option value="">Selecciona tu nombre...</option>
     </select>
     
     <div id="partidos" class="bg-white p-4 rounded shadow">
-        <p class="text-gray-500 text-center">Selecciona un usuario para ver los partidos</p>
+        <p class="text-gray-500 text-center">Cargando partidos...</p>
     </div>
 
     <script>
@@ -23,58 +23,57 @@
             "sb_publishable_dbe1TJq4ay0tylJGVZ2mKg_ljzOxigY"
         );
 
+        const API_KEY = '8bd17a06ad9c42b8940faa3869f2ed55';
+
         async function init() {
-            const { data, error } = await cliente.from('usuarios').select('nombre');
+            const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
             if (data) {
                 data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
             }
         }
 
-        async function cargar() {
+        async function cargarPartidos() {
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            const partidos = [
-                { id: "1", home: "España", away: "Cabo Verde" },
-                { id: "2", home: "Brasil", away: "Argentina" },
-                { id: "3", home: "Francia", away: "Alemania" }
-            ];
+            // 1. Obtener partidos de la API
+            const response = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+                headers: { 'X-Auth-Token': API_KEY }
+            });
+            const data = await response.json();
             
+            // 2. Obtener pronósticos del usuario
             const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
-            
-            document.getElementById('partidos').innerHTML = partidos.map(m => {
+
+            // 3. Pintar en pantalla
+            document.getElementById('partidos').innerHTML = data.matches.slice(0, 10).map(m => {
                 const p = pronos?.find(x => x.partido_id == m.id);
                 return `
-                    <div class="flex items-center gap-2 p-3 border-b">
-                        <span class="text-sm w-1/2 font-medium">${m.home} vs ${m.away}</span>
-                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-12 border text-center rounded">
-                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-12 border text-center rounded">
-                        <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">OK</button>
+                    <div class="flex items-center gap-2 p-3 border-b text-sm">
+                        <span class="w-1/2">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                        <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
+                        <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
+                        <button onclick="guardar('${m.id}', '${m.homeTeam.name} vs ${m.awayTeam.name}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
                     </div>`;
             }).join('');
         }
 
-        async function guardar(id) {
+        async function guardar(id, nombrePartido) {
             const u = document.getElementById('userSelector').value;
             const l = document.getElementById(`l-${id}`).value;
             const v = document.getElementById(`v-${id}`).value;
             
-            const payload = {
+            const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: u,
-                partido_id: id,
-                pronostico_local: parseInt(l) || 0,
-                pronostico_visitante: parseInt(v) || 0
-            };
-
-            const { error } = await cliente.from('pronosticos').upsert(payload);
+                partido_id: id.toString(),
+                pronostico_local: parseInt(l),
+                pronostico_visitante: parseInt(v),
+                partido_nombre: nombrePartido
+            });
             
-            if (error) {
-                console.error("Error al guardar:", error);
-                alert("Error al guardar: " + error.message);
-            } else {
-                alert("¡Pronóstico guardado exitosamente!");
-            }
+            if (error) alert("Error: " + error.message);
+            else alert("¡Pronóstico guardado!");
         }
 
         init();
