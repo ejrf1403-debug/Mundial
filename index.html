@@ -6,61 +6,43 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-gray-100 p-4 font-sans">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="md:col-span-2">
-            <select id="userSelector" class="w-full p-4 rounded-xl border mb-4 font-bold text-blue-700 shadow-sm">
-                <option value="">Selecciona tu usuario...</option>
-            </select>
-            <div id="partidos" class="bg-white p-4 rounded-xl shadow border h-[70vh] overflow-y-auto space-y-2"></div>
-        </div>
-        <div class="bg-white p-4 rounded-xl shadow border h-[80vh] flex flex-col">
-            <h2 class="font-black text-xl mb-4 border-b pb-2">📊 Posiciones</h2>
-            <div id="tablaContenido" class="overflow-y-auto flex-grow pr-2"></div>
-        </div>
+<body class="bg-gray-100 p-5">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+        <h1 class="text-2xl font-bold mb-4">Quiniela 2026</h1>
+        <select id="userSelector" class="w-full p-3 border rounded-lg mb-4 font-bold">
+            <option value="">Selecciona tu nombre...</option>
+        </select>
+        <div id="partidos" class="space-y-2"></div>
     </div>
 
     <script>
-        const cliente = supabase.createClient("https://vaayxjpzwhesukyzmnez.supabase.co", "sb_publishable_WlvJzS4xplDGVkDkjMB4Nw_M0c1yzXm");
+        // Credenciales actualizadas para el proyecto Quiniela_Final
+        const cliente = supabase.createClient(
+            "https://wfskavugxwhtdeyqopzm.supabase.co", 
+            "sb_publishable_dbe1TJq4ay0tylJGVZ2mKg_ljzOxigY"
+        );
 
         async function init() {
             const { data } = await cliente.from('usuarios').select('nombre');
             const sel = document.getElementById('userSelector');
-            [...new Set(data.map(u => u.nombre.trim()))].sort().forEach(n => sel.innerHTML += `<option value="${n}">${n}</option>`);
-            const p = new URLSearchParams(window.location.search);
-            if (p.has('u')) { sel.value = p.get('u'); cargarTodo(); }
-            sel.onchange = () => cargarTodo();
+            data.forEach(u => sel.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`);
+            sel.onchange = cargar;
         }
 
-        async function cargarTodo() {
+        async function cargar() {
             const u = document.getElementById('userSelector').value;
-            if(!u) return;
-            const [res, pRes] = await Promise.all([
-                fetch('https://vaayxjpzwhesukyzmnez.supabase.co/functions/v1/football-data-import').then(r => r.json()),
-                cliente.from('pronosticos').select('*')
-            ]);
+            // Usamos la URL de tu proyecto actual
+            const res = await fetch('https://wfskavugxwhtdeyqopzm.supabase.co/functions/v1/football-data-import');
+            const data = await res.json();
+            const pronos = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
             
-            const matches = res.matches;
-            const pronosticos = pRes.data;
-
-            document.getElementById('partidos').innerHTML = matches.map(m => {
-                const p = pronosticos.find(x => x.partido_id == m.id && x.nombre_usuario === u);
-                let color = "bg-white"; // Default
-                if(m.status === 'FINISHED' && p) {
-                    const rL = m.score.fullTime.home, rV = m.score.fullTime.away;
-                    const pL = p.pronostico_local, pV = p.pronostico_visitante;
-                    // Lógica de colores restaurada
-                    color = (pL === rL && pV === rV) ? 'bg-green-300' : 
-                            ((pL > pV && rL > rV) || (pL < pV && rL < rV) || (pL === pV && rL === rV)) ? 'bg-yellow-300' : 'bg-red-300';
-                }
-
-                return `<div class="flex items-center justify-between p-3 border rounded-lg ${color}">
-                    <span class="text-xs font-bold w-1/3 truncate">${m.homeTeam?.name} vs ${m.awayTeam?.name}</span>
-                    <div class="flex gap-1">
-                        <input type="number" id="l-${m.id}" value="${p?.pronostico_local ?? 0}" class="w-10 h-8 border rounded text-center">
-                        <input type="number" id="v-${m.id}" value="${p?.pronostico_visitante ?? 0}" class="w-10 h-8 border rounded text-center">
-                        <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-3 rounded text-xs">OK</button>
-                    </div>
+            document.getElementById('partidos').innerHTML = data.matches.map(m => {
+                const p = pronos.data.find(x => x.partido_id == m.id);
+                return `<div class="flex items-center gap-2 p-2 border-b">
+                    <span class="text-sm w-1/2 truncate">${m.homeTeam.name} vs ${m.awayTeam.name}</span>
+                    <input id="l-${m.id}" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
+                    <input id="v-${m.id}" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
+                    <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
                 </div>`;
             }).join('');
         }
@@ -70,19 +52,12 @@
             const l = parseInt(document.getElementById('l-'+id).value);
             const v = parseInt(document.getElementById('v-'+id).value);
             
-            // 1. ELIMINAMOS CUALQUIER PRONÓSTICO PREVIO PARA ESTE PARTIDO Y USUARIO
-            await cliente.from('pronosticos').delete().eq('nombre_usuario', u).eq('partido_id', String(id));
-            
-            // 2. INSERTAMOS EL NUEVO (Esto garantiza que no haya duplicados y se guarde)
-            const { error } = await cliente.from('pronosticos').insert({
-                nombre_usuario: u,
-                partido_id: String(id),
-                pronostico_local: l,
-                pronostico_visitante: v
-            });
+            const { error } = await cliente.from('pronosticos').upsert({
+                nombre_usuario: u, partido_id: String(id), pronostico_local: l, pronostico_visitante: v
+            }, { onConflict: 'nombre_usuario, partido_id' });
 
-            if(error) alert("Error: " + error.message);
-            else alert("¡Guardado exitoso!");
+            if(!error) alert("¡Guardado!");
+            else alert("Error: " + error.message);
         }
         init();
     </script>
