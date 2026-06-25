@@ -36,6 +36,7 @@
                 { id: "3", home: "Francia", away: "Alemania" }
             ];
             
+            // Traemos los pronósticos existentes
             const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
             
             document.getElementById('partidos').innerHTML = partidos.map(m => {
@@ -45,26 +46,30 @@
                         <span class="text-sm w-1/2 truncate">${m.home} vs ${m.away}</span>
                         <input id="l-${m.id}" type="number" value="${p?.pronostico_local ?? 0}" class="w-10 border text-center">
                         <input id="v-${m.id}" type="number" value="${p?.pronostico_visitante ?? 0}" class="w-10 border text-center">
-                        <button onclick="guardar('${m.id}', '${m.home}', '${m.away}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
+                        <button onclick="guardar('${m.id}')" class="bg-blue-600 text-white px-2 py-1 rounded">OK</button>
                     </div>`;
             }).join('');
         }
 
-        async function guardar(id, home, away) {
+        async function guardar(id) {
             const u = document.getElementById('userSelector').value;
             const l = document.getElementById(`l-${id}`).value;
             const v = document.getElementById(`v-${id}`).value;
             
+            // Usamos .upsert para insertar o actualizar si ya existe
             const { error } = await cliente.from('pronosticos').upsert({
                 nombre_usuario: u,
                 partido_id: id,
-                pronostico_local: l,
-                pronostico_visitante: v,
-                partido_nombre: `${home} vs ${away}`
-            });
+                pronostico_local: parseInt(l),
+                pronostico_visitante: parseInt(v)
+            }, { onConflict: 'nombre_usuario, partido_id' }); // Esto evita errores de duplicados
             
-            if (error) alert("Error al guardar");
-            else alert("¡Guardado, Emmanuel!");
+            if (error) {
+                console.error(error);
+                alert("Error al guardar: " + error.message);
+            } else {
+                alert("¡Guardado exitosamente!");
+            }
         }
 
         init();
