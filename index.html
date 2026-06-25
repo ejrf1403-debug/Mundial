@@ -2,12 +2,12 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Quiniela 2026</title>
+    <title>Quiniela Champions</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="p-4 bg-gray-100">
-    <h1 class="text-2xl font-bold mb-4 text-center">Quiniela 2026</h1>
+    <h1 class="text-2xl font-bold mb-4 text-center">Quiniela Champions</h1>
     
     <select id="userSelector" class="w-full p-2 mb-4 border rounded" onchange="cargarPartidos()">
         <option value="">Selecciona tu nombre...</option>
@@ -37,22 +37,26 @@
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            const targetUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
+            // ⚽ Probamos con Champions League (CL), disponible en el plan gratuito
+            const targetUrl = 'https://api.football-data.org/v4/competitions/CL/matches';
             const headers = { "X-Auth-Token": API_KEY };
             const headersBase64 = btoa(JSON.stringify(headers));
             const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}&headers=${headersBase64}`;
             
             try {
                 const response = await fetch(proxyUrl);
-                const data = await response.json();
                 
-                // Mostramos el contenido real que devuelve la API (para diagnóstico)
-                console.log("Respuesta de la API:", data);
+                // Si el proxy o la API devuelven un código de error, lo mostramos
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Error ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log("Respuesta:", data);
                 
                 if (!data.matches || !Array.isArray(data.matches)) {
-                    // Si no hay partidos, mostramos el error devuelto por la API
-                    const errorMsg = data.message || data.error || JSON.stringify(data);
-                    throw new Error("Error de la API: " + errorMsg);
+                    throw new Error("La API no devolvió partidos. Respuesta: " + JSON.stringify(data));
                 }
 
                 const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
@@ -68,7 +72,7 @@
                         </div>`;
                 }).join('');
             } catch (error) {
-                console.error("Error cargando partidos:", error);
+                console.error("Error:", error);
                 document.getElementById('partidos').innerHTML = `<p class='text-red-500'>${error.message}</p>`;
             }
         }
