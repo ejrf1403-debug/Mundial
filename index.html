@@ -37,14 +37,16 @@
             const u = document.getElementById('userSelector').value;
             if (!u) return;
 
-            // Usamos el proxy para evitar el error CORS
-            const proxyUrl = 'https://corsproxy.io/?https://api.football-data.org/v4/competitions/WC/matches';
+            // Usamos un proxy diferente y más confiable
+            const targetUrl = 'https://api.football-data.org/v4/competitions/WC/matches';
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
             
             try {
                 const response = await fetch(proxyUrl, {
                     headers: { 'X-Auth-Token': API_KEY }
                 });
-                const data = await response.json();
+                const jsonResponse = await response.json();
+                const data = JSON.parse(jsonResponse.contents);
                 
                 const { data: pronos } = await cliente.from('pronosticos').select('*').eq('nombre_usuario', u);
 
